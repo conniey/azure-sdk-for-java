@@ -145,7 +145,7 @@ public class ServiceBusReceiverAsyncClientJavaDocCodeSamples {
                 + "SharedAccessKey={key};EntityPath={eh-name}")
             .receiver()
             .queueName("<< QUEUE NAME >>")
-            .sessionId()
+            .useSessions()
             .buildAsyncClient();
         // END: com.azure.messaging.servicebus.servicebusasyncreceiverclient.instantiation#singlesession
 
@@ -163,7 +163,7 @@ public class ServiceBusReceiverAsyncClientJavaDocCodeSamples {
             .receiver()
             .topicName("<< TOPIC NAME >>")
             .subscriptionName("<< SUBSCRIPTION NAME >>")
-            .sessionId("<< my-session-id >>")
+            .useSessions("<< my-session-id >>")
             .buildAsyncClient();
         // END: com.azure.messaging.servicebus.servicebusasyncreceiverclient.instantiation#sessionId
 

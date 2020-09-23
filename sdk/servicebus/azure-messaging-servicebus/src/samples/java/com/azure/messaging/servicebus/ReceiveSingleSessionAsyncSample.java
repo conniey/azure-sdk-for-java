@@ -5,7 +5,6 @@ package com.azure.messaging.servicebus;
 
 import com.azure.messaging.servicebus.models.ReceiveMode;
 import reactor.core.Disposable;
-import reactor.core.publisher.Mono;
 
 import java.util.concurrent.TimeUnit;
 
@@ -35,7 +34,7 @@ public class ReceiveSingleSessionAsyncSample {
         ServiceBusReceiverAsyncClient receiver = new ServiceBusClientBuilder()
             .connectionString(connectionString)
             .receiver()
-            .sessionId()
+            .useSessions()
             .receiveMode(ReceiveMode.PEEK_LOCK)
             .topicName("<<topic-name>>")
             .subscriptionName("<<subscription-name>>")

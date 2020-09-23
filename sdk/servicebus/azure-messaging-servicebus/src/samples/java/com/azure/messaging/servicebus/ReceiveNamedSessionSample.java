@@ -42,7 +42,7 @@ public class ReceiveNamedSessionSample {
         ServiceBusReceiverClient receiver = new ServiceBusClientBuilder()
             .connectionString(connectionString)
             .receiver()
-            .sessionId("greetings")
+            .useSessions("greetings")
             .queueName("<<queue-name>>")
             .buildClient();
 

@@ -626,7 +626,6 @@ public final class ServiceBusClientBuilder {
      */
     @ServiceClientBuilder(serviceClients = {ServiceBusReceiverClient.class, ServiceBusReceiverAsyncClient.class})
     public final class ServiceBusSessionReceiverClientBuilder {
-
         private Integer maxConcurrentSessions = null;
         private int prefetchCount = DEFAULT_PREFETCH_COUNT;
         private String queueName;
@@ -787,7 +786,6 @@ public final class ServiceBusClientBuilder {
         private ReceiveMode receiveMode = ReceiveMode.PEEK_LOCK;
         private String subscriptionName;
         private String topicName;
-        private String sessionId;
 
         private ServiceBusReceiverClientBuilder() {
         }
@@ -834,24 +832,11 @@ public final class ServiceBusClientBuilder {
         }
 
         /**
-         * Listen to first unnamed session.
+         * Use sessions.
          *
          * @return The modified {@link ServiceBusSessionReceiverClientBuilder} object.
          */
-        public ServiceBusReceiverClientBuilder sessionId() {
-            this.sessionId = null;
-            return this;
-        }
-
-        /**
-         * Sets the session id.
-         *
-         * @param sessionId session id.
-         *
-         * @return The modified {@link ServiceBusSessionReceiverClientBuilder} object.
-         */
-        public ServiceBusReceiverClientBuilder sessionId(String sessionId) {
-            this.sessionId = sessionId;
+        public ServiceBusReceiverClientBuilder useSessions() {
             return this;
         }
 

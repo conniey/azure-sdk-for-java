@@ -62,7 +62,7 @@ import static com.azure.messaging.servicebus.implementation.Messages.INVALID_OPE
  * {@codesnippet com.azure.messaging.servicebus.servicebusasyncreceiverclient.receiveWithReceiveAndDeleteMode}
  *
  * <p><strong>Receive messages from a specific session</strong></p>
- * <p>To fetch messages from a specific session, set {@link ServiceBusReceiverClientBuilder#sessionId(String)}.
+ * <p>To fetch messages from a specific session, set {@link ServiceBusReceiverClientBuilder#useSessions(String)}.
  * </p>
  * {@codesnippet com.azure.messaging.servicebus.servicebusasyncreceiverclient.instantiation#sessionId}
  *
@@ -248,6 +248,25 @@ public final class ServiceBusReceiverAsyncClient implements AutoCloseable {
         }
         return updateDisposition(message, DispositionStatus.ABANDONED, null, null,
             propertiesToModify, transactionContext);
+    }
+
+    /**
+     * Accepts the first unnamed session.
+     *
+     * @return The first unnamed session.
+     */
+    public Mono<Void> acceptSession() {
+        return Mono.empty();
+    }
+
+    /**
+     * Accepts the given sessionId.
+     *
+     * @param sessionId Session to accept.
+     * @return Completes when a session is accepted.
+     */
+    public Mono<Void> acceptSession(String sessionId) {
+        return Mono.empty();
     }
 
     /**

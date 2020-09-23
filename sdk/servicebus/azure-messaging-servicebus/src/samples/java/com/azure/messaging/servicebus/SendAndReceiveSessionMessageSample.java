@@ -53,7 +53,7 @@ public class SendAndReceiveSessionMessageSample {
         ServiceBusReceiverAsyncClient receiver = builder.receiver()
             .receiveMode(ReceiveMode.PEEK_LOCK)
             .queueName(queueName)
-            .sessionId(sessionId)
+            .useSessions(sessionId)
             .buildAsyncClient();
 
         List<ServiceBusMessage> messages = Arrays.asList(

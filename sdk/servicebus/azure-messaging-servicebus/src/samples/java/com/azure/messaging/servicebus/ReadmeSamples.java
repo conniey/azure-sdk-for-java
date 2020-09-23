@@ -173,7 +173,7 @@ public class ReadmeSamples {
             .connectionString("<< CONNECTION STRING FOR THE SERVICE BUS NAMESPACE >>")
             .receiver()
             .queueName("<< QUEUE NAME >>")
-            .sessionId("greetings")
+            .useSessions("greetings")
             .buildAsyncClient();
     }
 
@@ -185,7 +185,7 @@ public class ReadmeSamples {
         ServiceBusReceiverAsyncClient receiver = new ServiceBusClientBuilder()
             .connectionString("<< CONNECTION STRING FOR THE SERVICE BUS NAMESPACE >>")
             .receiver()
-            .sessionId()
+            .useSessions()
             .queueName("<< QUEUE NAME >>")
             .buildAsyncClient();
     }
