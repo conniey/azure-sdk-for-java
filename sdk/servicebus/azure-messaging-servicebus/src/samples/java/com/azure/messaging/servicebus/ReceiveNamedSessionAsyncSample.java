@@ -35,24 +35,18 @@ public class ReceiveNamedSessionAsyncSample {
         // Service Bus namespace.
         ServiceBusReceiverAsyncClient receiver = new ServiceBusClientBuilder()
             .connectionString(connectionString)
-            .sessionReceiver()
+            .receiver()
             .sessionId("greetings")
             .receiveMode(ReceiveMode.PEEK_LOCK)
             .queueName("<<queue-name>>")
             .buildAsyncClient();
 
         Disposable subscription = receiver.receiveMessages()
-            .flatMap(context -> {
-                if (context.hasError()) {
-                    System.out.printf("An error occurred in session %s. Error: %s%n",
-                        context.getSessionId(), context.getThrowable());
-                    return Mono.empty();
-                }
-
-                System.out.println("Processing message from session: " + context.getSessionId());
+            .flatMap(message -> {
+                System.out.println("Processing message from session: " + message.getSessionId());
 
                 // Process message then complete it.
-                return receiver.complete(context.getMessage());
+                return receiver.complete(message);
             })
             .subscribe(aVoid -> {
             }, error -> System.err.println("Error occurred: " + error));

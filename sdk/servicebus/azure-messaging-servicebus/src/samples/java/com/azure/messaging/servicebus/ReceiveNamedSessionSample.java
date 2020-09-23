@@ -41,18 +41,16 @@ public class ReceiveNamedSessionSample {
         // Service Bus namespace.
         ServiceBusReceiverClient receiver = new ServiceBusClientBuilder()
             .connectionString(connectionString)
-            .sessionReceiver()
+            .receiver()
             .sessionId("greetings")
             .queueName("<<queue-name>>")
             .buildClient();
 
         while (isRunning.get()) {
-            IterableStream<ServiceBusReceivedMessageContext> messages = receiver.receiveMessages(10, Duration.ofSeconds(30));
+            IterableStream<ServiceBusReceivedMessage> messages = receiver.receiveMessages(10, Duration.ofSeconds(30));
 
-            for (ServiceBusReceivedMessageContext context : messages) {
-                System.out.println("Processing message from session: " + context.getSessionId());
-
-                ServiceBusReceivedMessage message = context.getMessage();
+            for (ServiceBusReceivedMessage message : messages) {
+                System.out.println("Processing message from session: " + message.getSessionId());
                 boolean isSuccessfullyProcessed = processMessage(message);
 
                 if (isSuccessfullyProcessed) {

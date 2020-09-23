@@ -50,7 +50,7 @@ public class SendAndReceiveSessionMessageSample {
             .buildAsyncClient();
 
         // Instantiate a client that will be used to receive messages from the session.
-        ServiceBusReceiverAsyncClient receiver = builder.sessionReceiver()
+        ServiceBusReceiverAsyncClient receiver = builder.receiver()
             .receiveMode(ReceiveMode.PEEK_LOCK)
             .queueName(queueName)
             .sessionId(sessionId)
@@ -82,9 +82,7 @@ public class SendAndReceiveSessionMessageSample {
             () -> System.out.println("Batch send complete."));
 
         // After sending that message, we receive the messages for that sessionId.
-        receiver.receiveMessages().flatMap(context -> {
-            ServiceBusReceivedMessage message = context.getMessage();
-
+        receiver.receiveMessages().flatMap(message -> {
             System.out.println("Received Message Id: " + message.getMessageId());
             System.out.println("Received Message Session Id: " + message.getSessionId());
             System.out.println("Received Message: " + new String(message.getBody()));

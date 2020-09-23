@@ -38,12 +38,10 @@ public class ReceiveMessageSyncSample {
         // Try to receive a set of messages from Service Bus 10 times. A batch of messages are returned when 5 messages
         // are received, or the operation timeout has elapsed, whichever occurs first.
         for (int i = 0; i < 10; i++) {
-            final IterableStream<ServiceBusReceivedMessageContext> receivedMessages =
+            final IterableStream<ServiceBusReceivedMessage> receivedMessages =
                 receiver.receiveMessages(5);
 
-            receivedMessages.stream().forEach(context -> {
-                ServiceBusReceivedMessage message = context.getMessage();
-
+            receivedMessages.stream().forEach(message -> {
                 System.out.println("Received Message Id: " + message.getMessageId());
                 System.out.println("Received Message: " + new String(message.getBody()));
 

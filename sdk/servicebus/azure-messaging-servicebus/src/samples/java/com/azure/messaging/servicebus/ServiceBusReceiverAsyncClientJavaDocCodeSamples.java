@@ -63,8 +63,7 @@ public class ServiceBusReceiverAsyncClientJavaDocCodeSamples {
         // Keep a reference to `subscription`. When the program is finished receiving messages, call
         // subscription.dispose(). This will stop fetching messages from the Service Bus.
         Disposable subscription = receiver.receiveMessages()
-            .subscribe(context -> {
-                ServiceBusReceivedMessage message = context.getMessage();
+            .subscribe(message -> {
                 System.out.printf("Received message id: %s%n", message.getMessageId());
                 System.out.printf("Contents of message as string: %s%n", new String(message.getBody(), UTF_8));
             }, error -> System.err.print(error));
@@ -87,7 +86,7 @@ public class ServiceBusReceiverAsyncClientJavaDocCodeSamples {
             .buildAsyncClient();
 
         // BEGIN: com.azure.messaging.servicebus.servicebusasyncreceiverclient.receive#basesubscriber
-        receiver.receiveMessages().subscribe(new BaseSubscriber<ServiceBusReceivedMessageContext>() {
+        receiver.receiveMessages().subscribe(new BaseSubscriber<ServiceBusReceivedMessage>() {
             private static final int NUMBER_OF_MESSAGES = 5;
             private final AtomicInteger currentNumberOfMessages = new AtomicInteger();
 
@@ -98,10 +97,8 @@ public class ServiceBusReceiverAsyncClientJavaDocCodeSamples {
             }
 
             @Override
-            protected void hookOnNext(ServiceBusReceivedMessageContext value) {
+            protected void hookOnNext(ServiceBusReceivedMessage message) {
                 // Process the ServiceBusReceivedMessage
-                ServiceBusReceivedMessage message = value.getMessage();
-
                 // If the number of messages we have currently received is a multiple of 5, that means we have reached
                 // the last message the Subscriber will provide to us. Invoking request(long) here, tells the Publisher
                 // that the subscriber is ready to get more messages from upstream.
@@ -125,8 +122,7 @@ public class ServiceBusReceiverAsyncClientJavaDocCodeSamples {
             .buildAsyncClient();
 
         // BEGIN: com.azure.messaging.servicebus.servicebusasyncreceiverclient.receive#all
-        Disposable subscription = receiver.receiveMessages().flatMap(context -> {
-            ServiceBusReceivedMessage message = context.getMessage();
+        Disposable subscription = receiver.receiveMessages().flatMap(message -> {
             System.out.printf("Received message id: %s%n", message.getMessageId());
             System.out.printf("Contents of message as string: %s%n", new String(message.getBody(), UTF_8));
             return receiver.complete(message);
@@ -147,8 +143,9 @@ public class ServiceBusReceiverAsyncClientJavaDocCodeSamples {
         ServiceBusReceiverAsyncClient receiver = new ServiceBusClientBuilder()
             .connectionString("Endpoint={fully-qualified-namespace};SharedAccessKeyName={policy-name};"
                 + "SharedAccessKey={key};EntityPath={eh-name}")
-            .sessionReceiver()
+            .receiver()
             .queueName("<< QUEUE NAME >>")
+            .sessionId()
             .buildAsyncClient();
         // END: com.azure.messaging.servicebus.servicebusasyncreceiverclient.instantiation#singlesession
 
@@ -163,7 +160,7 @@ public class ServiceBusReceiverAsyncClientJavaDocCodeSamples {
         ServiceBusReceiverAsyncClient consumer = new ServiceBusClientBuilder()
             .connectionString("Endpoint={fully-qualified-namespace};SharedAccessKeyName={policy-name};"
                 + "SharedAccessKey={key};EntityPath={eh-name}")
-            .sessionReceiver()
+            .receiver()
             .topicName("<< TOPIC NAME >>")
             .subscriptionName("<< SUBSCRIPTION NAME >>")
             .sessionId("<< my-session-id >>")
@@ -178,10 +175,10 @@ public class ServiceBusReceiverAsyncClientJavaDocCodeSamples {
      */
     public void sessionReceiverMultipleInstantiation() {
         // BEGIN: com.azure.messaging.servicebus.servicebusasyncreceiverclient.instantiation#multiplesessions
-        ServiceBusReceiverAsyncClient consumer = new ServiceBusClientBuilder()
+        ServiceBusSessionReceiverAsyncClient consumer = new ServiceBusClientBuilder()
             .connectionString("Endpoint={fully-qualified-namespace};SharedAccessKeyName={policy-name};"
                 + "SharedAccessKey={key};EntityPath={eh-name}")
-            .sessionReceiver()
+            .concurrentSessionReceiver()
             .topicName("<< TOPIC NAME >>")
             .subscriptionName("<< SUBSCRIPTION NAME >>")
             .maxConcurrentSessions(3)

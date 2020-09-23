@@ -291,7 +291,7 @@ public abstract class IntegrationTestBase extends TestBase {
                 final String queueName = getSessionQueueName(entityIndex);
                 assertNotNull(queueName, "'queueName' cannot be null.");
                 return onBuilderCreate.apply(builder)
-                    .sessionReceiver()
+                    .concurrentSessionReceiver()
                     .queueName(queueName);
 
             case SUBSCRIPTION:
@@ -300,7 +300,7 @@ public abstract class IntegrationTestBase extends TestBase {
                 assertNotNull(topicName, "'topicName' cannot be null.");
                 assertNotNull(subscriptionName, "'subscriptionName' cannot be null.");
                 return onBuilderCreate.apply(builder)
-                    .sessionReceiver()
+                    .concurrentSessionReceiver()
                     .topicName(topicName).subscriptionName(subscriptionName);
             default:
                 throw logger.logExceptionAsError(new IllegalArgumentException("Unknown entity type: " + entityType));

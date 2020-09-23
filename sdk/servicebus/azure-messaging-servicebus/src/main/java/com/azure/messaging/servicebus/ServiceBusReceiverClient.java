@@ -253,13 +253,11 @@ public final class ServiceBusReceiverClient implements AutoCloseable {
     /**
      * Gets the state of a session given its identifier.
      *
-     * @param sessionId Identifier of session to get.
-     *
      * @return The session state or null if there is no state set for the session.
      * @throws IllegalStateException if the receiver is a non-session receiver.
      */
-    public byte[] getSessionState(String sessionId) {
-        return asyncClient.getSessionState(sessionId).block(operationTimeout);
+    public byte[] getSessionState() {
+        return asyncClient.getSessionState().block(operationTimeout);
     }
 
     /**
@@ -428,7 +426,7 @@ public final class ServiceBusReceiverClient implements AutoCloseable {
      * @return An {@link IterableStream} of at most {@code maxMessages} messages from the Service Bus entity.
      * @throws IllegalArgumentException if {@code maxMessages} is zero or a negative value.
      */
-    public IterableStream<ServiceBusReceivedMessageContext> receiveMessages(int maxMessages) {
+    public IterableStream<ServiceBusReceivedMessage> receiveMessages(int maxMessages) {
         return receiveMessages(maxMessages, operationTimeout);
     }
 
@@ -443,7 +441,7 @@ public final class ServiceBusReceiverClient implements AutoCloseable {
      * @return An {@link IterableStream} of at most {@code maxMessages} messages from the Service Bus entity.
      * @throws IllegalArgumentException if {@code maxMessages} or {@code maxWaitTime} is zero or a negative value.
      */
-    public IterableStream<ServiceBusReceivedMessageContext> receiveMessages(int maxMessages,
+    public IterableStream<ServiceBusReceivedMessage> receiveMessages(int maxMessages,
         Duration maxWaitTime) {
         if (maxMessages <= 0) {
             throw logger.logExceptionAsError(new IllegalArgumentException(
@@ -456,7 +454,7 @@ public final class ServiceBusReceiverClient implements AutoCloseable {
                 new IllegalArgumentException("'maxWaitTime' cannot be zero or less. maxWaitTime: " + maxWaitTime));
         }
 
-        final Flux<ServiceBusReceivedMessageContext> messages = Flux.create(emitter -> queueWork(maxMessages,
+        final Flux<ServiceBusReceivedMessage> messages = Flux.create(emitter -> queueWork(maxMessages,
             maxWaitTime, emitter));
 
         return new IterableStream<>(messages);
@@ -572,21 +570,18 @@ public final class ServiceBusReceiverClient implements AutoCloseable {
     /**
      * Sets the state of a session given its identifier.
      *
-     * @param sessionId Identifier of session to get.
-     *
      * @return The next expiration time for the session lock.
      * @throws NullPointerException if {@code sessionId} is null.
      * @throws IllegalArgumentException if {@code sessionId} is an empty string.
      * @throws IllegalStateException if the receiver is a non-session receiver.
      */
-    public OffsetDateTime renewSessionLock(String sessionId) {
-        return asyncClient.renewSessionLock(sessionId).block(operationTimeout);
+    public OffsetDateTime renewSessionLock() {
+        return asyncClient.renewSessionLock().block(operationTimeout);
     }
 
     /**
      * Starts the auto lock renewal for a session id.
      *
-     * @param sessionId Id for the session to renew.
      * @param maxLockRenewalDuration Maximum duration to keep renewing the session.
      * @param onError A function to call when an error occurs during lock renewal.
      *
@@ -594,27 +589,26 @@ public final class ServiceBusReceiverClient implements AutoCloseable {
      * @throws IllegalArgumentException if {@code sessionId} is an empty string.
      * @throws IllegalStateException if the receiver is a non-session receiver or the receiver is disposed.
      */
-    public void renewSessionLock(String sessionId, Duration maxLockRenewalDuration, Consumer<Throwable> onError) {
+    public void renewSessionLock(Duration maxLockRenewalDuration, Consumer<Throwable> onError) {
         final Consumer<Throwable> throwableConsumer = onError != null
             ? onError
-            : error -> logger.warning("Exception occurred while renewing session: '{}'.", sessionId, error);
+            : error -> logger.warning("Exception occurred while renewing session: '{}'.", "sessionId", error);
 
-        asyncClient.renewSessionLock(sessionId, maxLockRenewalDuration).subscribe(
-            v -> logger.verbose("Completed renewing session: '{}'", sessionId),
+        asyncClient.renewSessionLock(maxLockRenewalDuration).subscribe(
+            v -> logger.verbose("Completed renewing session: '{}'", "sessionId"),
             throwableConsumer,
-            () -> logger.verbose("Auto session lock renewal operation completed: {}", sessionId));
+            () -> logger.verbose("Auto session lock renewal operation completed: {}", "sessionId"));
     }
 
     /**
      * Sets the state of a session given its identifier.
      *
-     * @param sessionId Identifier of session to get.
      * @param sessionState State to set on the session.
      *
      * @throws IllegalStateException if the receiver is a non-session receiver.
      */
-    public void setSessionState(String sessionId, byte[] sessionState) {
-        asyncClient.setSessionState(sessionId, sessionState).block(operationTimeout);
+    public void setSessionState(byte[] sessionState) {
+        asyncClient.setSessionState(sessionState).block(operationTimeout);
     }
 
     /**
@@ -671,7 +665,7 @@ public final class ServiceBusReceiverClient implements AutoCloseable {
      * entity.
      */
     private void queueWork(int maximumMessageCount, Duration maxWaitTime,
-        FluxSink<ServiceBusReceivedMessageContext> emitter) {
+        FluxSink<ServiceBusReceivedMessage> emitter) {
         final long id = idGenerator.getAndIncrement();
         final SynchronousReceiveWork work = new SynchronousReceiveWork(id, maximumMessageCount, maxWaitTime, emitter);
 

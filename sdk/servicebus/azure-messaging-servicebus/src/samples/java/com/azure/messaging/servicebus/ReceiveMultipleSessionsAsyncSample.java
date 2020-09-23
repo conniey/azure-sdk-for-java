@@ -36,9 +36,9 @@ public class ReceiveMultipleSessionsAsyncSample {
         // Create a receiver.
         // "<<queue-name>>" will be the name of the Service Bus session-enabled queue instance you created inside the
         // Service Bus namespace.
-        ServiceBusReceiverAsyncClient receiver = new ServiceBusClientBuilder()
+        ServiceBusSessionReceiverAsyncClient receiver = new ServiceBusClientBuilder()
             .connectionString(connectionString)
-            .sessionReceiver()
+            .concurrentSessionReceiver()
             .maxConcurrentSessions(3)
             .queueName("<<queue-name>>")
             .buildAsyncClient();
