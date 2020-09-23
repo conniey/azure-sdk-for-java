@@ -119,8 +119,20 @@ public final class ServiceBusReceiverClient implements AutoCloseable {
         asyncClient.abandon(message, propertiesToModify, transactionContext).block(operationTimeout);
     }
 
+    /**
+     * Accepts the first unnamed session.
+     */
     public void acceptSession() {
         asyncClient.acceptSession().block(operationTimeout);
+    }
+
+    /**
+     * Accepts the given sessionId.
+     *
+     * @param sessionId Session to accept.
+     */
+    public void acceptSession(String sessionId) {
+        asyncClient.acceptSession(sessionId).block(operationTimeout);
     }
 
     /**

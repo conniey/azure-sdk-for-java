@@ -3,6 +3,7 @@
 
 package com.azure.messaging.servicebus;
 
+import com.azure.core.util.CoreUtils;
 import com.azure.core.util.logging.ClientLogger;
 import com.azure.messaging.servicebus.administration.models.DeadLetterOptions;
 import com.azure.messaging.servicebus.implementation.DispositionStatus;
@@ -12,8 +13,12 @@ import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static com.azure.core.util.FluxUtil.monoError;
 
@@ -172,11 +177,24 @@ public class ServiceBusSessionReceiverAsyncClient implements AutoCloseable {
      * @throws IllegalStateException if the receiver is a non-session receiver.
      */
     public Mono<byte[]> getSessionState(String sessionId) {
-        return Mono.empty();
+        if (CoreUtils.isNullOrEmpty(sessionId)) {
+            return monoError(logger, new IllegalArgumentException("invalid session id"));
+        }
+
+        return Mono.just("foo".getBytes());
     }
 
     public Flux<ServiceBusReceivedMessageContext> receiveMessages() {
-        return Flux.empty();
+        final String sessionId = "session-0";
+        final List<ServiceBusReceivedMessageContext> messages = IntStream.range(0, 10).mapToObj(index -> {
+            final ServiceBusReceivedMessage message = new ServiceBusReceivedMessage(("foo " + index).getBytes());
+            message.setSessionId(sessionId);
+            message.setMessageId(UUID.randomUUID().toString());
+
+            return new ServiceBusReceivedMessageContext(message);
+        }).collect(Collectors.toList());
+
+        return Flux.fromIterable(messages);
     }
 
     /**
@@ -188,6 +206,10 @@ public class ServiceBusSessionReceiverAsyncClient implements AutoCloseable {
      * @throws IllegalStateException if the receiver is a non-session receiver.
      */
     public Mono<OffsetDateTime> renewSessionLock(String sessionId) {
+        if (CoreUtils.isNullOrEmpty(sessionId)) {
+            return monoError(logger, new IllegalArgumentException("invalid session id"));
+        }
+
         return Mono.empty();
     }
 
@@ -203,6 +225,10 @@ public class ServiceBusSessionReceiverAsyncClient implements AutoCloseable {
      * @throws IllegalStateException if the receiver is a non-session receiver or the receiver is disposed.
      */
     public Mono<Void> renewSessionLock(String sessionId, Duration maxLockRenewalDuration) {
+        if (CoreUtils.isNullOrEmpty(sessionId)) {
+            return monoError(logger, new IllegalArgumentException("invalid session id"));
+        }
+
         return Mono.empty();
     }
 
@@ -216,6 +242,10 @@ public class ServiceBusSessionReceiverAsyncClient implements AutoCloseable {
      * @throws IllegalStateException if the receiver is a non-session receiver.
      */
     public Mono<Void> setSessionState(String sessionId, byte[] sessionState) {
+        if (CoreUtils.isNullOrEmpty(sessionId)) {
+            return monoError(logger, new IllegalArgumentException("invalid session id"));
+        }
+
         return Mono.empty();
     }
 

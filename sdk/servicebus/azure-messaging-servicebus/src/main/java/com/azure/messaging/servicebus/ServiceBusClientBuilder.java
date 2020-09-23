@@ -630,7 +630,6 @@ public final class ServiceBusClientBuilder {
         private int prefetchCount = DEFAULT_PREFETCH_COUNT;
         private String queueName;
         private ReceiveMode receiveMode = ReceiveMode.PEEK_LOCK;
-        private String sessionId;
         private String subscriptionName;
         private String topicName;
 
@@ -744,30 +743,7 @@ public final class ServiceBusClientBuilder {
 
             validateAndThrow(prefetchCount);
 
-            final ServiceBusConnectionProcessor connectionProcessor = getOrCreateConnectionProcessor(messageSerializer);
-            final ReceiverOptions receiverOptions = new ReceiverOptions(receiveMode, prefetchCount,
-                sessionId, isRollingSessionReceiver(), maxConcurrentSessions);
-
             return new ServiceBusSessionReceiverAsyncClient();
-        }
-
-        /**
-         * This is a rolling session receiver only if maxConcurrentSessions is > 0 AND sessionId is null or empty. If
-         * there is a sessionId, this is going to be a single, named session receiver.
-         *
-         * @return {@code true} if this is an unnamed rolling session receiver; {@code false} otherwise.
-         */
-        private boolean isRollingSessionReceiver() {
-            if (maxConcurrentSessions == null) {
-                return false;
-            }
-
-            if (maxConcurrentSessions < 1) {
-                throw logger.logExceptionAsError(
-                    new IllegalArgumentException("Maximum number of concurrent sessions must be positive."));
-            }
-
-            return CoreUtils.isNullOrEmpty(sessionId);
         }
     }
 
@@ -786,6 +762,7 @@ public final class ServiceBusClientBuilder {
         private ReceiveMode receiveMode = ReceiveMode.PEEK_LOCK;
         private String subscriptionName;
         private String topicName;
+        private boolean useSessions;
 
         private ServiceBusReceiverClientBuilder() {
         }
@@ -837,6 +814,7 @@ public final class ServiceBusClientBuilder {
          * @return The modified {@link ServiceBusSessionReceiverClientBuilder} object.
          */
         public ServiceBusReceiverClientBuilder useSessions() {
+            this.useSessions = true;
             return this;
         }
 
@@ -901,7 +879,9 @@ public final class ServiceBusClientBuilder {
             validateAndThrow(prefetchCount);
 
             final ServiceBusConnectionProcessor connectionProcessor = getOrCreateConnectionProcessor(messageSerializer);
-            final ReceiverOptions receiverOptions = new ReceiverOptions(receiveMode, prefetchCount);
+            final ReceiverOptions receiverOptions = useSessions
+                ? new ReceiverOptions(receiveMode, prefetchCount, null, false, null)
+                : new ReceiverOptions(receiveMode, prefetchCount);
 
             return new ServiceBusReceiverAsyncClient(connectionProcessor.getFullyQualifiedNamespace(), entityPath,
                 entityType, receiverOptions, connectionProcessor, ServiceBusConstants.OPERATION_TIMEOUT,

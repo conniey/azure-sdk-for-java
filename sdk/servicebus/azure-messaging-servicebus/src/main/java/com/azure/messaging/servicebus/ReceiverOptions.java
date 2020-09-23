@@ -25,8 +25,8 @@ class ReceiverOptions {
         this.isSessionReceiver = false;
     }
 
-    ReceiverOptions(ReceiveMode receiveMode, int prefetchCount,
-        String sessionId, boolean isRollingSessionReceiver, Integer maxConcurrentSessions) {
+    ReceiverOptions(ReceiveMode receiveMode, int prefetchCount, String sessionId, boolean isRollingSessionReceiver,
+        Integer maxConcurrentSessions) {
         this.receiveMode = receiveMode;
         this.prefetchCount = prefetchCount;
         this.sessionId = sessionId;
