@@ -38,7 +38,7 @@ public class ReceiveMultipleSessionsAsyncSample {
         // Service Bus namespace.
         ServiceBusSessionReceiverAsyncClient receiver = new ServiceBusClientBuilder()
             .connectionString(connectionString)
-            .concurrentSessionReceiver()
+            .sessionReceiver()
             .maxConcurrentSessions(3)
             .queueName("<<queue-name>>")
             .buildAsyncClient();

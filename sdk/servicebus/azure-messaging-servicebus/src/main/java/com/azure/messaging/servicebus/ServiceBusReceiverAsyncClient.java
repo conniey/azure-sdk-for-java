@@ -62,13 +62,12 @@ import static com.azure.messaging.servicebus.implementation.Messages.INVALID_OPE
  * {@codesnippet com.azure.messaging.servicebus.servicebusasyncreceiverclient.receiveWithReceiveAndDeleteMode}
  *
  * <p><strong>Receive messages from a specific session</strong></p>
- * <p>To fetch messages from a specific session, set {@link ServiceBusReceiverAsyncClient#acceptSession(String)}.
+ * <p>To fetch messages from a specific session, set.
  * </p>
  * {@codesnippet com.azure.messaging.servicebus.servicebusasyncreceiverclient.instantiation#sessionId}
  *
  * <p><strong>Process messages from multiple sessions</strong></p>
- * <p>To process messages from multiple sessions, set
- * {@link ServiceBusSessionReceiverClientBuilder#maxConcurrentSessions(int)}. This will process in parallel at most
+ * <p>To process messages from multiple sessions, set. This will process in parallel at most
  * {@code maxConcurrentSessions}. In addition, when all the messages in a session have been consumed, it will find the
  * next available session to process.</p>
  * {@codesnippet com.azure.messaging.servicebus.servicebusasyncreceiverclient.instantiation#multiplesessions}
@@ -173,6 +172,15 @@ public final class ServiceBusReceiverAsyncClient implements AutoCloseable {
     }
 
     /**
+     * Gets the session id currently being worked with.
+     *
+     * @return Session id.
+     */
+    public String getSessionId() {
+        return null;
+    }
+
+    /**
      * Abandon a {@link ServiceBusReceivedMessage message}. This will make the message available
      * again for processing. Abandoning a message will increase the delivery count on the message.
      *
@@ -233,49 +241,6 @@ public final class ServiceBusReceiverAsyncClient implements AutoCloseable {
         }
         return updateDisposition(message, DispositionStatus.ABANDONED, null, null,
             propertiesToModify, transactionContext);
-    }
-
-    /**
-     * Accepts the first unnamed session.
-     *
-     * @return The first unnamed session.
-     */
-    public Mono<Void> acceptSession() {
-        if (!receiverOptions.isSessionReceiver()) {
-            return monoError(logger, new IllegalArgumentException("Cannot acceptSession on non-session receiver."));
-        }
-
-        if (hasAcceptedSession.getAndSet(true)) {
-            return monoError(logger, new IllegalStateException("An unnamed session has already been accepted. id: "
-                + acceptedSessionId));
-        } else {
-            final int milliseconds = random.nextInt(1000);
-
-            return Mono.delay(Duration.ofMillis(milliseconds)).then(Mono.fromRunnable(() ->
-                this.acceptedSessionId.compareAndSet(null, UUID.randomUUID().toString())));
-        }
-    }
-
-    /**
-     * Accepts the given sessionId.
-     *
-     * @param sessionId Session to accept.
-     * @return Completes when a session is accepted.
-     */
-    public Mono<Void> acceptSession(String sessionId) {
-        if (!receiverOptions.isSessionReceiver()) {
-            return monoError(logger, new IllegalArgumentException("Cannot acceptSession on non-session receiver."));
-        }
-
-        if (hasAcceptedSession.getAndSet(true)) {
-            return monoError(logger, new IllegalStateException("An unnamed session has already been accepted. id: "
-                + acceptedSessionId));
-        } else {
-            final int milliseconds = random.nextInt(1000);
-
-            return Mono.delay(Duration.ofMillis(milliseconds)).then(Mono.fromRunnable(() ->
-                this.acceptedSessionId.compareAndSet(null, sessionId)));
-        }
     }
 
     /**
@@ -470,7 +435,7 @@ public final class ServiceBusReceiverAsyncClient implements AutoCloseable {
      * @return The session state or an empty Mono if there is no state set for the session.
      * @throws IllegalStateException if the receiver is a non-session receiver.
      */
-    public Mono<byte[]> getSessionState() {
+    public Mono<byte[]> getSessionState(String sessionId) {
         if (receiverOptions.isSessionReceiver() && !hasAcceptedSession.get()) {
             return monoError(logger,
                 new IllegalStateException("Cannot getSessionState until session is accepted."));
@@ -507,7 +472,7 @@ public final class ServiceBusReceiverAsyncClient implements AutoCloseable {
      * @throws IllegalStateException if the receiver is disposed.
      * @see <a href="https://docs.microsoft.com/azure/service-bus-messaging/message-browsing">Message browsing</a>
      */
-    Mono<ServiceBusReceivedMessage> peekMessage(String sessionId) {
+    public Mono<ServiceBusReceivedMessage> peekMessage(String sessionId) {
         if (isDisposed.get()) {
             return monoError(logger, new IllegalStateException(
                 String.format(INVALID_OPERATION_DISPOSED_RECEIVER, "peek")));
@@ -558,7 +523,7 @@ public final class ServiceBusReceiverAsyncClient implements AutoCloseable {
      * @return A peeked {@link ServiceBusReceivedMessage}.
      * @see <a href="https://docs.microsoft.com/azure/service-bus-messaging/message-browsing">Message browsing</a>
      */
-    Mono<ServiceBusReceivedMessage> peekMessageAt(long sequenceNumber, String sessionId) {
+    public Mono<ServiceBusReceivedMessage> peekMessageAt(long sequenceNumber, String sessionId) {
         if (isDisposed.get()) {
             return monoError(logger, new IllegalStateException(
                 String.format(INVALID_OPERATION_DISPOSED_RECEIVER, "peekAt")));
@@ -597,7 +562,7 @@ public final class ServiceBusReceiverAsyncClient implements AutoCloseable {
      * @throws IllegalArgumentException if {@code maxMessages} is not a positive integer.
      * @see <a href="https://docs.microsoft.com/azure/service-bus-messaging/message-browsing">Message browsing</a>
      */
-    Flux<ServiceBusReceivedMessage> peekMessages(int maxMessages, String sessionId) {
+    public Flux<ServiceBusReceivedMessage> peekMessages(int maxMessages, String sessionId) {
         if (isDisposed.get()) {
             return fluxError(logger, new IllegalStateException(
                 String.format(INVALID_OPERATION_DISPOSED_RECEIVER, "peekBatch")));
@@ -665,7 +630,7 @@ public final class ServiceBusReceiverAsyncClient implements AutoCloseable {
      * @throws IllegalArgumentException if {@code maxMessages} is not a positive integer.
      * @see <a href="https://docs.microsoft.com/azure/service-bus-messaging/message-browsing">Message browsing</a>
      */
-    Flux<ServiceBusReceivedMessage> peekMessagesAt(int maxMessages, long sequenceNumber, String sessionId) {
+    public Flux<ServiceBusReceivedMessage> peekMessagesAt(int maxMessages, long sequenceNumber, String sessionId) {
         if (isDisposed.get()) {
             return fluxError(logger, new IllegalStateException(
                 String.format(INVALID_OPERATION_DISPOSED_RECEIVER, "peekBatchAt")));
@@ -690,27 +655,13 @@ public final class ServiceBusReceiverAsyncClient implements AutoCloseable {
      *
      * @return An <b>infinite</b> stream of messages from the Service Bus entity.
      */
-    public Flux<ServiceBusReceivedMessage> receiveMessages() {
+    public Flux<ServiceBusReceivedMessageContext> receiveMessages() {
         if (receiverOptions.isSessionReceiver() && !hasAcceptedSession.get()) {
             return fluxError(logger,
                 new IllegalStateException("Cannot receiveMessages until session is accepted."));
         }
 
-        final String sessionId = acceptedSessionId.get();
-        final List<ServiceBusReceivedMessage> messages = IntStream.range(0, 10).mapToObj(index -> {
-            final ServiceBusReceivedMessage message = new ServiceBusReceivedMessage(("foo " + index).getBytes());
-
-            if (receiverOptions.isSessionReceiver()) {
-                message.setSessionId(sessionId);
-            } else {
-                message.setLockToken(UUID.randomUUID());
-            }
-
-            message.setMessageId(UUID.randomUUID().toString());
-            return message;
-        }).collect(Collectors.toList());
-
-        return Flux.fromIterable(messages);
+        return Flux.empty();
     }
 
     /**
@@ -741,7 +692,7 @@ public final class ServiceBusReceiverAsyncClient implements AutoCloseable {
      *
      * @return A deferred message with the matching {@code sequenceNumber}.
      */
-    Mono<ServiceBusReceivedMessage> receiveDeferredMessage(long sequenceNumber, String sessionId) {
+    public Mono<ServiceBusReceivedMessage> receiveDeferredMessage(long sequenceNumber, String sessionId) {
         return connectionProcessor
             .flatMap(connection -> connection.getManagementNode(entityPath, entityType))
             .flatMap(node -> node.receiveDeferredMessages(receiverOptions.getReceiveMode(),
@@ -786,7 +737,7 @@ public final class ServiceBusReceiverAsyncClient implements AutoCloseable {
      *
      * @return An {@link IterableStream} of deferred {@link ServiceBusReceivedMessage messages}.
      */
-    Flux<ServiceBusReceivedMessage> receiveDeferredMessages(Iterable<Long> sequenceNumbers,
+    public Flux<ServiceBusReceivedMessage> receiveDeferredMessages(Iterable<Long> sequenceNumbers,
         String sessionId) {
         if (isDisposed.get()) {
             return fluxError(logger, new IllegalStateException(
@@ -894,7 +845,7 @@ public final class ServiceBusReceiverAsyncClient implements AutoCloseable {
      * @return The next expiration time for the session lock.
      * @throws IllegalStateException if the receiver is a non-session receiver.
      */
-    public Mono<OffsetDateTime> renewSessionLock() {
+    public Mono<OffsetDateTime> renewSessionLock(String sessionId) {
         if (isDisposed.get()) {
             return monoError(logger, new IllegalStateException(
                 String.format(INVALID_OPERATION_DISPOSED_RECEIVER, "renewSessionLock")));
@@ -925,7 +876,7 @@ public final class ServiceBusReceiverAsyncClient implements AutoCloseable {
      * @throws IllegalArgumentException if {@code sessionId} is an empty string.
      * @throws IllegalStateException if the receiver is a non-session receiver or the receiver is disposed.
      */
-    public Mono<Void> renewSessionLock(Duration maxLockRenewalDuration) {
+    public Mono<Void> renewSessionLock(String sessionId, Duration maxLockRenewalDuration) {
         if (isDisposed.get()) {
             return monoError(logger, new IllegalStateException(
                 String.format(INVALID_OPERATION_DISPOSED_RECEIVER, "getAutoRenewSessionLock")));
@@ -961,7 +912,7 @@ public final class ServiceBusReceiverAsyncClient implements AutoCloseable {
      * @return A Mono that completes when the session is set
      * @throws IllegalStateException if the receiver is a non-session receiver.
      */
-    public Mono<Void> setSessionState(byte[] sessionState) {
+    public Mono<Void> setSessionState(String sessionId, byte[] sessionState) {
         if (isDisposed.get()) {
             return monoError(logger, new IllegalStateException(
                 String.format(INVALID_OPERATION_DISPOSED_RECEIVER, "setSessionState")));

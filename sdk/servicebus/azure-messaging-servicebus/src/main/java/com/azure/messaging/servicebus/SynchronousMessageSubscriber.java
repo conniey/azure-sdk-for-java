@@ -21,12 +21,12 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 /**
  * Subscriber that listens to events and publishes them downstream and publishes events to them in the order received.
  */
-class SynchronousMessageSubscriber extends BaseSubscriber<ServiceBusReceivedMessage> {
+class SynchronousMessageSubscriber extends BaseSubscriber<ServiceBusReceivedMessageContext> {
     private final ClientLogger logger = new ClientLogger(SynchronousMessageSubscriber.class);
     private final AtomicBoolean isDisposed = new AtomicBoolean();
     private final AtomicInteger wip = new AtomicInteger();
     private final Queue<SynchronousReceiveWork> workQueue = new ConcurrentLinkedQueue<>();
-    private final Queue<ServiceBusReceivedMessage> bufferMessages = new ConcurrentLinkedQueue<>();
+    private final Queue<ServiceBusReceivedMessageContext> bufferMessages = new ConcurrentLinkedQueue<>();
     private final AtomicLong remaining = new AtomicLong();
 
     private final long requested;
@@ -41,7 +41,6 @@ class SynchronousMessageSubscriber extends BaseSubscriber<ServiceBusReceivedMess
     private static final AtomicReferenceFieldUpdater<SynchronousMessageSubscriber, Subscription> UPSTREAM =
         AtomicReferenceFieldUpdater.newUpdater(SynchronousMessageSubscriber.class, Subscription.class,
             "subscription");
-
 
     SynchronousMessageSubscriber(long prefetch, SynchronousReceiveWork initialWork) {
         this.workQueue.add(initialWork);
@@ -72,7 +71,7 @@ class SynchronousMessageSubscriber extends BaseSubscriber<ServiceBusReceivedMess
      * @param message Event to publish.
      */
     @Override
-    protected void hookOnNext(ServiceBusReceivedMessage message) {
+    protected void hookOnNext(ServiceBusReceivedMessageContext message) {
         bufferMessages.add(message);
         drain();
     }

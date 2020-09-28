@@ -178,7 +178,7 @@ public class ServiceBusReceiverAsyncClientJavaDocCodeSamples {
         ServiceBusSessionReceiverAsyncClient consumer = new ServiceBusClientBuilder()
             .connectionString("Endpoint={fully-qualified-namespace};SharedAccessKeyName={policy-name};"
                 + "SharedAccessKey={key};EntityPath={eh-name}")
-            .concurrentSessionReceiver()
+            .sessionReceiver()
             .topicName("<< TOPIC NAME >>")
             .subscriptionName("<< SUBSCRIPTION NAME >>")
             .maxConcurrentSessions(3)
