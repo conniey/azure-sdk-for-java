@@ -75,19 +75,19 @@ and namespaces that begin with `com.microsoft.azure.servicebus` and a version of
 
 ### Client hierarchy
 
-As part of the new Java SDK guidelines, all clients are instantiated from a builder. Each builder can instantiate an
-async client or a sync client via `buildAsyncClient()` or `buildClient()`. In our new library, the single entry point is
-via `ServiceBusClientBuilder`, rather than one for each of queue, topic, subscription, and session. You can create
-senders and receivers from this client to the queue/topic/subscription/session of your choice and start
-sending/receiving messages.
+As part of the new Java SDK guidelines, all clients are instantiated from a builder which is the single entry point to the library.
+Each client is expected to have a sync and async version that can be instantiated via `buildAsyncClient()` or `buildClient()` methods
+on the builder.
 
-In addition,
+In the new Service Bus library, this single entry point is the `ServiceBusClientBuilder` which can be used to create sender and receiver
+clients to the queue/topic/subscription/session of your choice and start sending/receiving messages.
 
 ### Async programming model
 
-Usage of `CompletableFuture` for async operations is replaced with a different programming model. The modernized library uses [Project Reactor](https://projectreactor.io). This is a shift to thinking about data as a Stream of information.
+Usage of `CompletableFuture` for async operations is replaced with a different programming model that uses [Project Reactor](https://projectreactor.io).
+This is a shift to thinking about data as a Stream of information.
 
-Project Reactor has many bridge APIs to quickly migrate code using `CompletabeFuture`. A few examples are:
+Project Reactor has many bridge APIs to quickly migrate code using `CompletableFuture`. A few examples are:
 * [Mono.fromFuture(CompletableFuture<T>)](https://projectreactor.io/docs/core/release/api/reactor/core/publisher/Mono.html#fromFuture-java.util.concurrent.CompletableFuture-)
 * [Mono.fromCompletionStage(CompletionStage<T> completionStage)](https://projectreactor.io/docs/core/release/api/reactor/core/publisher/Mono.html#fromCompletionStage-java.util.concurrent.CompletionStage-)
 * For more: [Mono](https://projectreactor.io/docs/core/release/api/reactor/core/publisher/Mono.html)
@@ -158,12 +158,12 @@ sender.send(message);
 ```
 
 Now in `azure-messaging-servicebus`, we combine all send related features under a common class `ServiceBusSenderClient`
-and `ServiceBusSenderAsyncClient` that you can create from the top-level client builder using the `sender()` method to
-get a sub-builder. This method takes the queue or topic you want to target. This way, we give you a one stop shop for
+and its async counterpart `ServiceBusSenderAsyncClient`. You can create these from the top-level client builder using the `sender()` method to
+get a sub-builder. The sub builder takes the queue or topic you want to target. This way, we give you a one stop shop for
 all your send related needs.
 
 We continue to support sending bytes in the message. Though, if you are working with strings, you can now create a
-message directly without having to convert it to bytes first. The snippet below demonstrates the sync sender.
+message directly without having to convert it to bytes first. The snippet below demonstrates the sync sender client.
 
 ```java
 // create the sync sender via the builder and its sub-builder
@@ -180,7 +180,7 @@ ServiceBusMessage message = new ServiceBusMessage("Hello world!");
 sender.SendMessage(message);
 ```
 
-The feature to send a list of messages in a single call was implemented by batching all the messages into a single AMQP
+The feature to send a list of messages in a single call was previously implemented by batching all the messages into a single AMQP
 message and sending that to the service.
 
 While we continue to support this feature, it always had the potential to fail unexpectedly when the resulting batched
@@ -268,17 +268,21 @@ try {
 }
 ```
 
-The modernized Java SDK uses reactive programming for asynchronous operations rather than CompletableFutures. This
+The new Java SDK uses reactive programming for asynchronous operations rather than CompletableFutures. This
 allows us to think of receiving as a potentially infinite stream of messages instead of invoking periodic message
 handlers like the example above. Things of note:
 
-* Auto-complete has been removed.
-* Auto-renew is done using the ServiceBusReceiverAsyncClient's `renewMessageLock(ServiceBusReceivedMessage, Duration)`
-  overload or ServiceBusReceiverClient's `renewMessageLock(ServiceBusReceivedMessage, Duration, Consumer<Throwable>)`.
 * [Project Reactor](https://projectreactor.io) has a plethora of operators that can transform, limit, apply
   back-pressure, etc. to reactive Streams.
+* The auto lock renewal feature is made available via an explicit helper method on both the sync and async clients in 
+contrast to the previous model where this was a feature available only in the async way of receiving messages.
+    * ServiceBusReceiverClient: `renewMessageLock(ServiceBusReceivedMessage, Duration, Consumer<Throwable>)`
+    * ServiceBusReceiverAsyncClient : `renewMessageLock(ServiceBusReceivedMessage, Duration)`
+* The feature to auto complete messages in the async way of receiving messages has been removed in favor of 
+maintaining feature parity between the sync and async clients. This means that you will need to explicitly call the 
+`complete()` or `abandon()` methods on the receiver as needed for every message you receive.
 
-The sample below shows the async client receiving messages.
+The sample below shows the async receiver client receiving messages using reactive programming model:
 
 ```java
 ServiceBusReceiverAsyncClient asyncReceiver = new ServiceBusClientBuilder()
@@ -307,7 +311,7 @@ Disposable subscription = asyncReceiver.receiveMessages()
     });
 ```
 
-The sync receiver fetches messages in batches. An example is below:
+The sample below shows the sync receiver client receiving messages in batches:
 
 ```java
 ServiceBusReceiverClient client = new ServiceBusClientBuilder()
@@ -333,9 +337,6 @@ Previously, you had the below options to receive messages from a session enabled
 - Register message and error handlers using the `QueueClient.registerSessionHandler()` method to receive messages from
   an available set of sessions
 - Use the `ClientFactory.acceptMessageSessionAsync()` method to get an instance of the `IMessageSession` class that will be tied to a given sessionId or to the next available session if no sessionId is provided.
-
-While the first option is similar to what you would do in a non-session scenario, the second that allows you
-finer-grained control is very different from any other pattern used in the library.
 
 Now, we simplify this by giving session variants of the same methods and classes that are available when working with
 queues/subscriptions that do not have sessions enabled. The difference is an intermediate client
