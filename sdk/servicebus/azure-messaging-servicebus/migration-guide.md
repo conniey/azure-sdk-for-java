@@ -22,7 +22,9 @@ for the `azure-messaging-servicebus` library rather than this guide.
     - [Group id, artifact id, and package names](#group-id-artifact-id-and-package-names)
     - [Client hierarchy](#client-hierarchy)
     - [Async programming model](#async-programming-model)
-    - [Client constructors](#client-constructors)
+    - [Connection Pooling](#connection-pooling)
+  - [Migration Samples](#migration-samples)
+    - [Instantiating clients](#instantiating-clients)
     - [Sending messages](#sending-messages)
     - [Receiving messages](#receiving-messages)
     - [Working with sessions](#working-with-sessions)
@@ -43,10 +45,10 @@ Azure service.
 
 To improve the development experience across Azure services, including Service Bus, a set of uniform [design
 guidelines](https://azure.github.io/azure-sdk/general_introduction.html) was created for all languages to drive a
-consistent experience with established API patterns for all services. A set of [.NET-specific
+consistent experience with established API patterns for all services. A set of [Java specific
 guidelines](https://azure.github.io/azure-sdk/java_introduction.html) was also introduced to ensure that Java clients
-have a natural and idiomatic feel that mirrors that of the Java base class libraries. Further details are available in
-the guidelines for those interested.
+have a natural and idiomatic feel that mirrors that of Java developers. Further details are available in the guidelines
+for those interested.
 
 The new Service Bus library `azure-messaging-servicebus` provides the ability to share in some of the cross-service
 improvements made to the Azure development experience, such as using the new `azure-identity` library to share a single
@@ -67,51 +69,42 @@ Artifact and package names for the modern Azure client libraries for Java have c
 pattern `azure-[area].[service]` where the legacy clients followed the pattern `azure-[service]`. This provides a quick
 and accessible means to help understand, at a glance, whether you are using the modern or legacy clients.
 
-In the case of Service Bus, the modern client libraries have packages and namespaces that begin with
+In the case of Service Bus, the new client libraries have packages and namespaces that begin with
 `com.azure.messaging.servicebus` and were released beginning with version 7. The legacy client libraries have packages
 and namespaces that begin with `com.microsoft.azure.servicebus` and a version of 3.x.x or below.
 
 ### Client hierarchy
 
-In the interest of simplifying the API surface we've made a single entry point called `ServiceBusClientBuilder`, rather
-than one for each of queue, topic, subscription, and session. This acts as the single entry point in contrast with
-multiple entry points from before. You can create senders and receivers from this client to the
-queue/topic/subscription/session of your choice and start sending/receiving messages.
+As part of the new Java SDK guidelines, all clients are instantiated from a builder. Each builder can instantiate an
+async client or a sync client via `buildAsyncClient()` or `buildClient()`. In our new library, the single entry point is
+via `ServiceBusClientBuilder`, rather than one for each of queue, topic, subscription, and session. You can create
+senders and receivers from this client to the queue/topic/subscription/session of your choice and start
+sending/receiving messages.
 
-#### Approachability
+In addition,
 
-By having a single entry point, the `ServiceBusClientBuilder` helps with the discoverability of the API as you can
-explore all available clients via sub-builders available on `ServiceBusClientBuilder`. This is better than searching
-through documentation or exploring namespace for the types that you can instantiate. Whether sending or receiving, using
-sessions or not, you will start your applications by constructing the same client builder.
+### Async programming model
 
-#### Consistency
+Usage of `CompletableFuture` for async operations is replaced with a different programming model. The modernized library uses [Project Reactor](https://projectreactor.io). This is a shift to thinking about data as a Stream of information.
 
-We now have methods with similar names, signature and location to create senders and receivers. This provides
-consistency and predictability on the various features of the library. We have session/non-session usage be as seamless
-as possible. This allows you to make less changes to your code when you want to move from sessions to non-sessions or
-the other way around.
+Project Reactor has many bridge APIs to quickly migrate code using `CompletabeFuture`. A few examples are:
+* [Mono.fromFuture(CompletableFuture<T>)](https://projectreactor.io/docs/core/release/api/reactor/core/publisher/Mono.html#fromFuture-java.util.concurrent.CompletableFuture-)
+* [Mono.fromCompletionStage(CompletionStage<T> completionStage)](https://projectreactor.io/docs/core/release/api/reactor/core/publisher/Mono.html#fromCompletionStage-java.util.concurrent.CompletionStage-)
+* For more: [Mono](https://projectreactor.io/docs/core/release/api/reactor/core/publisher/Mono.html)
 
-#### Connection Pooling
+### Connection Pooling
 
 By using a single top-level client builder, we can implicitly share a single AMQP connection for all operations that an
 application performs. In the previous library `azure-servicebus`, connection sharing was explicit. You had to pass in a
 `MessagingFactory` object  to share a connection.
 
 By making this connection sharing be implicit to a `ServiceBusClientBuilder` instance, we can help ensure that
-applications will not use multiple connections unless they explicitly opt in by creating multiple subclient instances.
-The mental model of 1 client - 1 connection is more intuitive than 1 client/sender/receiver - 1 connection.
+applications will not use multiple connections unless they explicitly opt in by creating multiple client builder
+instances.
 
-### Async programming model
+## Migration Samples
 
-Usage of `CompletableFuture` for async operations is replaced with a different programming model. The modernized library uses [Project Reactor](https://projectreactor.io). This is a shift to thinking about data as a Stream of information.
-
-Project Reactor has many bridge APIs to quickly migrate code using `CompletabeFuture`. A few are:
-* [Mono.fromFuture(CompletableFuture<T>)](https://projectreactor.io/docs/core/release/api/reactor/core/publisher/Mono.html#fromFuture-java.util.concurrent.CompletableFuture-)
-* [Mono.fromCompletionStage(CompletionStage<T> completionStage)](https://projectreactor.io/docs/core/release/api/reactor/core/publisher/Mono.html#fromCompletionStage-java.util.concurrent.CompletionStage-)
-* For more: [Mono](https://projectreactor.io/docs/core/release/api/reactor/core/publisher/Mono.html)
-
-### Client constructors
+### Instantiating clients
 
 While we continue to support connection strings when constructing a client, the main difference is when using Azure
 Active Directory. We now use the new [azure-identity](https://search.maven.org/artifact/com.azure/azure-identity)
@@ -128,11 +121,11 @@ ServiceBusSenderClient client = new ServiceBusClientBuilder()
     .queueName("my-queue")
     .buildClient();
 
-// Create a receiver client that will authenticate using a connection string
+// Create a sender client that will authenticate using a connection string
 String connectionString = "Endpoint=sb://yournamespace.servicebus.windows.net/;SharedAccessKeyName=your-key-name;SharedAccessKey=your-key";
-ServiceBusReceiverClient client = new ServiceBusClientBuilder()
+ServiceBusSenderClient client = new ServiceBusClientBuilder()
     .connectionString(connectionString)
-    .receiver()
+    .sender()
     .queueName("my-queue")
     .buildClient();
 ```
@@ -170,10 +163,10 @@ get a sub-builder. This method takes the queue or topic you want to target. This
 all your send related needs.
 
 We continue to support sending bytes in the message. Though, if you are working with strings, you can now create a
-message directly without having to convert it to bytes first.
+message directly without having to convert it to bytes first. The snippet below demonstrates the sync sender.
 
 ```java
-// create the sender via the builder and its sub-builder
+// create the sync sender via the builder and its sub-builder
 ServiceBusSenderClient client = new ServiceBusClientBuilder()
     .connectionString(connectionString)
     .sender()
@@ -195,9 +188,16 @@ AMQP message exceeded the size limit of the sender. To help with this, we now pr
 messages to be sent at once using the new `ServiceBusMessageBatch` class.
 
 In the below code snippet, `inputMessageArray` is an array of messages which we will loop over to safely batch and then
-send.
+send. This uses the sync sender as well.
 
 ```java
+// create the sync sender via the builder and its sub-builder
+ServiceBusSenderClient client = new ServiceBusClientBuilder()
+    .connectionString(connectionString)
+    .sender()
+    .queueName("my-queue")
+    .buildClient();
+
 ServiceBusMessage[] inputMessageArray = new ServiceBusMessage[10];
 ServiceBusMessageBatch messageBatch = sender.createBatch();
 
@@ -249,23 +249,10 @@ try {
         @Override
         public CompletableFuture<Void> onMessageAsync(IMessage message) {
             MessageBody messageBody = message.getMessageBody();
-            switch (messageBody.getBodyType()) {
-                case BINARY:
-                    List<byte[]> binary = messageBody.getBinaryData();
-                    byte[] bytes = binary.get(0);
-                    System.out.printf("Received message with Binary body: %s%n",
-                        new String(bytes));
-                    break;
-                case VALUE:
-                    System.out.printf("Received message with Value body: %s%n",
-                        messageBody.getValueData());
-                    break;
-                case SEQUENCE:
-                    List<List<Object>> sequence = messageBody.getSequenceData();
-                    System.out.printf("Received message with Sequence body: size[%s]%n",
-                        sequence.size());
-                    break;
-            }
+            List<byte[]> binary = messageBody.getBinaryData();
+            byte[] bytes = binary.get(0);
+            System.out.printf("Received message with Binary body: %s%n",
+                new String(bytes));
 
             return client.completeAsync(message.getLockToken());
         }
@@ -289,7 +276,9 @@ handlers like the example above. Things of note:
 * Auto-renew is done using the ServiceBusReceiverAsyncClient's `renewMessageLock(ServiceBusReceivedMessage, Duration)`
   overload or ServiceBusReceiverClient's `renewMessageLock(ServiceBusReceivedMessage, Duration, Consumer<Throwable>)`.
 * [Project Reactor](https://projectreactor.io) has a plethora of operators that can transform, limit, apply
-  backpressure, etc. to reactive Streams.
+  back-pressure, etc. to reactive Streams.
+
+The sample below shows the async client receiving messages.
 
 ```java
 ServiceBusReceiverAsyncClient asyncReceiver = new ServiceBusClientBuilder()
@@ -316,6 +305,26 @@ Disposable subscription = asyncReceiver.receiveMessages()
     }, () -> {
         System.out.println("Completed receiving messages.");
     });
+```
+
+The sync receiver fetches messages in batches. An example is below:
+
+```java
+ServiceBusReceiverClient client = new ServiceBusClientBuilder()
+    .connectionString(connectionString)
+    .receiver()
+    .queueName("queue-0")
+    .buildClient();
+
+IterableStream<ServiceBusReceivedMessageContext> messages =
+    client.receiveMessages(10);
+
+for (ServiceBusReceivedMessageContext context : messages) {
+    ServiceBusReceivedMessage message = context.getMessage();
+
+    System.out.printf("%s: Received. %s%n", context.getSessionId(),
+        new String(message.getBody()));
+}
 ```
 
 ### Working with sessions
