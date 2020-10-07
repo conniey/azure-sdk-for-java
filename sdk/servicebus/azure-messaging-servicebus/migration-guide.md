@@ -270,17 +270,10 @@ try {
 
 The new Java SDK uses reactive programming for asynchronous operations rather than CompletableFutures. This
 allows us to think of receiving as a potentially infinite stream of messages instead of invoking periodic message
-handlers like the example above. Things of note:
+handlers like the example above.
 
-* [Project Reactor](https://projectreactor.io) has a plethora of operators that can transform, limit, apply
-  back-pressure, etc. to reactive Streams.
-* The auto lock renewal feature is made available via an explicit helper method on both the sync and async clients in 
-contrast to the previous model where this was a feature available only in the async way of receiving messages.
-    * ServiceBusReceiverClient: `renewMessageLock(ServiceBusReceivedMessage, Duration, Consumer<Throwable>)`
-    * ServiceBusReceiverAsyncClient : `renewMessageLock(ServiceBusReceivedMessage, Duration)`
-* The feature to auto complete messages in the async way of receiving messages has been removed in favor of 
-maintaining feature parity between the sync and async clients. This means that you will need to explicitly call the 
-`complete()` or `abandon()` methods on the receiver as needed for every message you receive.
+[Project Reactor](https://projectreactor.io) has a plethora of operators that can transform, limit, apply
+back-pressure, etc. to reactive Streams.
 
 The sample below shows the async receiver client receiving messages using reactive programming model:
 
