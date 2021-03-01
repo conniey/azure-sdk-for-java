@@ -3,20 +3,12 @@
 
 package com.azure.messaging.eventhubs;
 
+import com.azure.core.amqp.AmqpConnectionBuilder;
 import com.azure.core.amqp.AmqpRetryOptions;
 import com.azure.core.amqp.AmqpTransportType;
 import com.azure.core.amqp.ProxyAuthenticationType;
 import com.azure.core.amqp.ProxyOptions;
-import com.azure.core.amqp.implementation.AzureTokenManagerProvider;
-import com.azure.core.amqp.implementation.CbsAuthorizationType;
-import com.azure.core.amqp.implementation.ConnectionOptions;
-import com.azure.core.amqp.implementation.ConnectionStringProperties;
-import com.azure.core.amqp.implementation.MessageSerializer;
-import com.azure.core.amqp.implementation.ReactorHandlerProvider;
-import com.azure.core.amqp.implementation.ReactorProvider;
-import com.azure.core.amqp.implementation.StringUtil;
-import com.azure.core.amqp.implementation.TokenManagerProvider;
-import com.azure.core.amqp.implementation.TracerProvider;
+import com.azure.core.amqp.models.SslVerifyMode;
 import com.azure.core.annotation.ServiceClientBuilder;
 import com.azure.core.annotation.ServiceClientProtocol;
 import com.azure.core.credential.TokenCredential;
@@ -99,7 +91,6 @@ import java.util.regex.Pattern;
 @ServiceClientBuilder(serviceClients = {EventHubProducerAsyncClient.class, EventHubProducerClient.class,
     EventHubConsumerAsyncClient.class, EventHubConsumerClient.class}, protocol = ServiceClientProtocol.AMQP)
 public class EventHubClientBuilder {
-
     // Default number of events to fetch when creating the consumer.
     static final int DEFAULT_PREFETCH_COUNT = 500;
 
@@ -133,10 +124,10 @@ public class EventHubClientBuilder {
     private final ClientLogger logger = new ClientLogger(EventHubClientBuilder.class);
     private final Object connectionLock = new Object();
     private final AtomicBoolean isSharedConnection = new AtomicBoolean();
+    private final AmqpConnectionBuilder connectionBuilder;
     private TokenCredential credentials;
     private Configuration configuration;
     private ProxyOptions proxyOptions;
-    private AmqpRetryOptions retryOptions;
     private Scheduler scheduler;
     private AmqpTransportType transport;
     private String fullyQualifiedNamespace;
@@ -144,9 +135,6 @@ public class EventHubClientBuilder {
     private String consumerGroup;
     private EventHubConnectionProcessor eventHubConnectionProcessor;
     private Integer prefetchCount;
-    private ClientOptions clientOptions;
-    private SslDomain.VerifyMode verifyMode;
-    private URL customEndpointAddress;
 
     /**
      * Keeps track of the open clients that were created from this builder when there is a shared connection.
@@ -159,7 +147,10 @@ public class EventHubClientBuilder {
      * created using the builder.
      */
     public EventHubClientBuilder() {
-        transport = AmqpTransportType.AMQP;
+        this.connectionBuilder = new AmqpConnectionBuilder()
+            .transportType(AmqpTransportType.AMQP)
+            .retryOptions(DEFAULT_RETRY)
+            .verifyMode(SslVerifyMode.VERIFY_PEER_NAME);
     }
 
     /**
@@ -191,17 +182,6 @@ public class EventHubClientBuilder {
         return credential(properties.getEndpoint().getHost(), properties.getEntityPath(), tokenCredential);
     }
 
-    private TokenCredential getTokenCredential(ConnectionStringProperties properties) {
-        TokenCredential tokenCredential;
-        if (properties.getSharedAccessSignature() == null) {
-            tokenCredential = new EventHubSharedKeyCredential(properties.getSharedAccessKeyName(),
-                properties.getSharedAccessKey(), ClientConstants.TOKEN_VALIDITY);
-        } else {
-            tokenCredential = new EventHubSharedKeyCredential(properties.getSharedAccessSignature());
-        }
-        return tokenCredential;
-    }
-
     /**
      * Sets the client options.
      *
@@ -209,7 +189,7 @@ public class EventHubClientBuilder {
      * @return The updated {@link EventHubClientBuilder} object.
      */
     public EventHubClientBuilder clientOptions(ClientOptions clientOptions) {
-        this.clientOptions = clientOptions;
+        connectionBuilder.clientOptions(clientOptions);
         return this;
     }
 
@@ -337,6 +317,7 @@ public class EventHubClientBuilder {
             throw logger.logExceptionAsError(new IllegalArgumentException("'eventHubName' cannot be an empty string."));
         }
 
+        this.connectionBuilder.tokenCredential(credential);
         return this;
     }
 
@@ -617,6 +598,17 @@ public class EventHubClientBuilder {
                 logger.warning("Shared EventHubConnectionProcessor was already disposed.");
             }
         }
+    }
+
+    private TokenCredential getTokenCredential(ConnectionStringProperties properties) {
+        TokenCredential tokenCredential;
+        if (properties.getSharedAccessSignature() == null) {
+            tokenCredential = new EventHubSharedKeyCredential(properties.getSharedAccessKeyName(),
+                properties.getSharedAccessKey(), ClientConstants.TOKEN_VALIDITY);
+        } else {
+            tokenCredential = new EventHubSharedKeyCredential(properties.getSharedAccessSignature());
+        }
+        return tokenCredential;
     }
 
     private EventHubConnectionProcessor buildConnectionProcessor(MessageSerializer messageSerializer) {
