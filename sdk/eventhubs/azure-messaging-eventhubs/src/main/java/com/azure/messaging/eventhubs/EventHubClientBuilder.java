@@ -8,6 +8,7 @@ import com.azure.core.amqp.AmqpRetryOptions;
 import com.azure.core.amqp.AmqpTransportType;
 import com.azure.core.amqp.ProxyAuthenticationType;
 import com.azure.core.amqp.ProxyOptions;
+import com.azure.core.amqp.models.CbsAuthorizationType;
 import com.azure.core.amqp.models.SslVerifyMode;
 import com.azure.core.annotation.ServiceClientBuilder;
 import com.azure.core.annotation.ServiceClientProtocol;
@@ -29,7 +30,6 @@ import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
 import java.net.InetSocketAddress;
-import java.net.MalformedURLException;
 import java.net.Proxy;
 import java.net.URL;
 import java.util.Locale;
@@ -177,8 +177,8 @@ public class EventHubClientBuilder {
      *     connection string.
      */
     public EventHubClientBuilder connectionString(String connectionString) {
-        ConnectionStringProperties properties = new ConnectionStringProperties(connectionString);
-        TokenCredential tokenCredential = getTokenCredential(properties);
+        final ConnectionStringProperties properties = new ConnectionStringProperties(connectionString);
+        final TokenCredential tokenCredential = getTokenCredential(properties);
         return credential(properties.getEndpoint().getHost(), properties.getEntityPath(), tokenCredential);
     }
 
@@ -221,7 +221,7 @@ public class EventHubClientBuilder {
         }
 
         final ConnectionStringProperties properties = new ConnectionStringProperties(connectionString);
-        TokenCredential tokenCredential = getTokenCredential(properties);
+        final TokenCredential tokenCredential = getTokenCredential(properties);
 
         if (!CoreUtils.isNullOrEmpty(properties.getEntityPath())
             && !eventHubName.equals(properties.getEntityPath())) {
@@ -246,7 +246,7 @@ public class EventHubClientBuilder {
      * @return The updated {@link EventHubClientBuilder} object.
      */
     public EventHubClientBuilder configuration(Configuration configuration) {
-        this.configuration = configuration;
+        connectionBuilder.configuration(configuration);
         return this;
     }
 
@@ -263,18 +263,7 @@ public class EventHubClientBuilder {
      * @throws IllegalArgumentException if {@code customEndpointAddress} cannot be parsed into a valid {@link URL}.
      */
     public EventHubClientBuilder customEndpointAddress(String customEndpointAddress) {
-        if (customEndpointAddress == null) {
-            this.customEndpointAddress = null;
-            return this;
-        }
-
-        try {
-            this.customEndpointAddress = new URL(customEndpointAddress);
-        } catch (MalformedURLException e) {
-            throw logger.logExceptionAsError(
-                new IllegalArgumentException(customEndpointAddress + " : is not a valid URL.", e));
-        }
-
+        connectionBuilder.customEndpointAddress(customEndpointAddress);
         return this;
     }
 
@@ -306,18 +295,25 @@ public class EventHubClientBuilder {
      */
     public EventHubClientBuilder credential(String fullyQualifiedNamespace, String eventHubName,
         TokenCredential credential) {
-        this.fullyQualifiedNamespace = Objects.requireNonNull(fullyQualifiedNamespace,
-            "'fullyQualifiedNamespace' cannot be null.");
-        this.credentials = Objects.requireNonNull(credential, "'credential' cannot be null.");
-        this.eventHubName = Objects.requireNonNull(eventHubName, "'eventHubName' cannot be null.");
+        Objects.requireNonNull(fullyQualifiedNamespace, "'fullyQualifiedNamespace' cannot be null.");
+        Objects.requireNonNull(credential, "'credential' cannot be null.");
 
+        this.eventHubName = Objects.requireNonNull(eventHubName, "'eventHubName' cannot be null.");
         if (CoreUtils.isNullOrEmpty(fullyQualifiedNamespace)) {
             throw logger.logExceptionAsError(new IllegalArgumentException("'host' cannot be an empty string."));
         } else if (CoreUtils.isNullOrEmpty(eventHubName)) {
             throw logger.logExceptionAsError(new IllegalArgumentException("'eventHubName' cannot be an empty string."));
         }
 
-        this.connectionBuilder.tokenCredential(credential);
+        final CbsAuthorizationType authorizationType = credential instanceof EventHubSharedKeyCredential
+            ? CbsAuthorizationType.SHARED_ACCESS_SIGNATURE
+            : CbsAuthorizationType.JSON_WEB_TOKEN;
+
+        connectionBuilder
+            .fullyQualifiedNamespace(fullyQualifiedNamespace)
+            .tokenCredential(credential)
+            .authorizationType(authorizationType);
+
         return this;
     }
 
@@ -330,7 +326,7 @@ public class EventHubClientBuilder {
      * @return The updated {@link EventHubClientBuilder} object.
      */
     public EventHubClientBuilder proxyOptions(ProxyOptions proxyOptions) {
-        this.proxyOptions = proxyOptions;
+        connectionBuilder.proxyOptions(proxyOptions);
         return this;
     }
 
@@ -343,7 +339,7 @@ public class EventHubClientBuilder {
      * @return The updated {@link EventHubClientBuilder} object.
      */
     public EventHubClientBuilder transportType(AmqpTransportType transport) {
-        this.transport = transport;
+        connectionBuilder.transportType(transport);
         return this;
     }
 
@@ -355,7 +351,7 @@ public class EventHubClientBuilder {
      * @return The updated {@link EventHubClientBuilder} object.
      */
     public EventHubClientBuilder retry(AmqpRetryOptions retryOptions) {
-        this.retryOptions = retryOptions;
+        connectionBuilder.retryOptions(retryOptions);
         return this;
     }
 
@@ -418,8 +414,8 @@ public class EventHubClientBuilder {
      * @param verifyMode The verification mode.
      * @return The updated {@link EventHubClientBuilder} object.
      */
-    EventHubClientBuilder verifyMode(SslDomain.VerifyMode verifyMode) {
-        this.verifyMode = verifyMode;
+    EventHubClientBuilder verifyMode(SslVerifyMode verifyMode) {
+        connectionBuilder.verifyMode(verifyMode);
         return this;
     }
 
@@ -611,7 +607,7 @@ public class EventHubClientBuilder {
         return tokenCredential;
     }
 
-    private EventHubConnectionProcessor buildConnectionProcessor(MessageSerializer messageSerializer) {
+    private EventHubConnectionProcessor buildConnectionProcessor() {
         final ConnectionOptions connectionOptions = getConnectionOptions();
         final TokenManagerProvider tokenManagerProvider = new AzureTokenManagerProvider(
             connectionOptions.getAuthorizationType(), connectionOptions.getFullyQualifiedNamespace(),
@@ -649,7 +645,7 @@ public class EventHubClientBuilder {
     }
 
     private ConnectionOptions getConnectionOptions() {
-        configuration = configuration == null ? Configuration.getGlobalConfiguration().clone() : configuration;
+        configuration = configuration == null ?  : configuration;
 
         if (credentials == null) {
             final String connectionString = configuration.get(AZURE_EVENT_HUBS_CONNECTION_STRING);

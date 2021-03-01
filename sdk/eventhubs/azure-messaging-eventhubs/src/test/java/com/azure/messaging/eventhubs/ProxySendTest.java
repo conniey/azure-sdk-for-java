@@ -4,12 +4,12 @@
 package com.azure.messaging.eventhubs;
 
 import com.azure.core.amqp.AmqpTransportType;
+import com.azure.core.amqp.models.SslVerifyMode;
 import com.azure.core.util.logging.ClientLogger;
 import com.azure.messaging.eventhubs.jproxy.ProxyServer;
 import com.azure.messaging.eventhubs.jproxy.SimpleProxy;
 import com.azure.messaging.eventhubs.models.EventPosition;
 import com.azure.messaging.eventhubs.models.SendOptions;
-import org.apache.qpid.proton.engine.SslDomain;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
@@ -84,7 +84,7 @@ class ProxySendTest extends IntegrationTestBase {
     @Override
     protected void beforeTest() {
         builder = new EventHubClientBuilder()
-            .verifyMode(SslDomain.VerifyMode.ANONYMOUS_PEER)
+            .verifyMode(SslVerifyMode.NONE)
             .transportType(AmqpTransportType.AMQP_WEB_SOCKETS)
             .connectionString(getConnectionString());
     }
