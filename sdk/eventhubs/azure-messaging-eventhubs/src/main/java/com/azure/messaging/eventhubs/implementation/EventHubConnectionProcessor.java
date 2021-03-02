@@ -19,8 +19,7 @@ public class EventHubConnectionProcessor extends AmqpChannelProcessor<EventHubAm
     private final String eventHubName;
     private final AmqpRetryOptions retryOptions;
 
-    public EventHubConnectionProcessor(String fullyQualifiedNamespace, String eventHubName,
-        AmqpRetryOptions retryOptions) {
+    public EventHubConnectionProcessor(String eventHubName, AmqpRetryOptions retryOptions) {
         super(fullyQualifiedNamespace, eventHubName, channel -> channel.getEndpointStates(),
             RetryUtil.getRetryPolicy(retryOptions), new ClientLogger(EventHubConnectionProcessor.class));
 

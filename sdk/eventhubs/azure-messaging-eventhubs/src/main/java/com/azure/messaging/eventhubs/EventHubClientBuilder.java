@@ -3,6 +3,7 @@
 
 package com.azure.messaging.eventhubs;
 
+import com.azure.core.amqp.AmqpConnection;
 import com.azure.core.amqp.AmqpConnectionBuilder;
 import com.azure.core.amqp.AmqpRetryOptions;
 import com.azure.core.amqp.AmqpTransportType;
@@ -17,21 +18,20 @@ import com.azure.core.exception.AzureException;
 import com.azure.core.util.ClientOptions;
 import com.azure.core.util.Configuration;
 import com.azure.core.util.CoreUtils;
+import com.azure.core.util.Header;
 import com.azure.core.util.logging.ClientLogger;
 import com.azure.core.util.tracing.Tracer;
 import com.azure.messaging.eventhubs.implementation.ClientConstants;
-import com.azure.messaging.eventhubs.implementation.EventHubAmqpConnection;
 import com.azure.messaging.eventhubs.implementation.EventHubConnectionProcessor;
-import com.azure.messaging.eventhubs.implementation.EventHubReactorAmqpConnection;
 import com.azure.messaging.eventhubs.implementation.EventHubSharedKeyCredential;
 import org.apache.qpid.proton.engine.SslDomain;
 import reactor.core.publisher.Flux;
-import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -39,6 +39,7 @@ import java.util.ServiceLoader;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
+import java.util.stream.StreamSupport;
 
 /**
  * This class provides a fluent builder API to aid the instantiation of {@link EventHubProducerAsyncClient}, {@link
@@ -116,7 +117,6 @@ public class EventHubClientBuilder {
     private static final String VERSION_KEY = "version";
     private static final String UNKNOWN = "UNKNOWN";
 
-    private static final String AZURE_EVENT_HUBS_CONNECTION_STRING = "AZURE_EVENT_HUBS_CONNECTION_STRING";
     private static final AmqpRetryOptions DEFAULT_RETRY = new AmqpRetryOptions()
         .setTryTimeout(ClientConstants.OPERATION_TIMEOUT);
     private static final Pattern HOST_PORT_PATTERN = Pattern.compile("^[^:]+:\\d+");
@@ -125,16 +125,17 @@ public class EventHubClientBuilder {
     private final Object connectionLock = new Object();
     private final AtomicBoolean isSharedConnection = new AtomicBoolean();
     private final AmqpConnectionBuilder connectionBuilder;
-    private TokenCredential credentials;
+    private final Header versionHeader;
+    private final Header productHeader;
+
     private Configuration configuration;
     private ProxyOptions proxyOptions;
-    private Scheduler scheduler;
-    private AmqpTransportType transport;
-    private String fullyQualifiedNamespace;
     private String eventHubName;
     private String consumerGroup;
     private EventHubConnectionProcessor eventHubConnectionProcessor;
     private Integer prefetchCount;
+    private AmqpRetryOptions retryOptions;
+    private ClientOptions clientOptions;
 
     /**
      * Keeps track of the open clients that were created from this builder when there is a shared connection.
@@ -150,7 +151,13 @@ public class EventHubClientBuilder {
         this.connectionBuilder = new AmqpConnectionBuilder()
             .transportType(AmqpTransportType.AMQP)
             .retryOptions(DEFAULT_RETRY)
-            .verifyMode(SslVerifyMode.VERIFY_PEER_NAME);
+            .verifyMode(SslVerifyMode.VERIFY_PEER_NAME)
+            .configuration(Configuration.getGlobalConfiguration().clone());
+        this.retryOptions = DEFAULT_RETRY;
+
+        final Map<String, String> properties = CoreUtils.getProperties(EVENTHUBS_PROPERTIES_FILE);
+        this.productHeader = new Header(NAME_KEY, properties.getOrDefault(NAME_KEY, UNKNOWN));
+        this.versionHeader = new Header(VERSION_KEY, properties.getOrDefault(VERSION_KEY, UNKNOWN));
     }
 
     /**
@@ -189,7 +196,7 @@ public class EventHubClientBuilder {
      * @return The updated {@link EventHubClientBuilder} object.
      */
     public EventHubClientBuilder clientOptions(ClientOptions clientOptions) {
-        connectionBuilder.clientOptions(clientOptions);
+        this.clientOptions = clientOptions;
         return this;
     }
 
@@ -311,7 +318,7 @@ public class EventHubClientBuilder {
 
         connectionBuilder
             .fullyQualifiedNamespace(fullyQualifiedNamespace)
-            .tokenCredential(credential)
+            .tokenCredential(credential, ClientConstants.AZURE_ACTIVE_DIRECTORY_SCOPE)
             .authorizationType(authorizationType);
 
         return this;
@@ -326,7 +333,7 @@ public class EventHubClientBuilder {
      * @return The updated {@link EventHubClientBuilder} object.
      */
     public EventHubClientBuilder proxyOptions(ProxyOptions proxyOptions) {
-        connectionBuilder.proxyOptions(proxyOptions);
+        this.proxyOptions = proxyOptions;
         return this;
     }
 
@@ -352,6 +359,7 @@ public class EventHubClientBuilder {
      */
     public EventHubClientBuilder retry(AmqpRetryOptions retryOptions) {
         connectionBuilder.retryOptions(retryOptions);
+        this.retryOptions = retryOptions;
         return this;
     }
 
@@ -393,18 +401,6 @@ public class EventHubClientBuilder {
         }
 
         this.prefetchCount = prefetchCount;
-        return this;
-    }
-
-    /**
-     * Package-private method that sets the scheduler for the created Event Hub client.
-     *
-     * @param scheduler Scheduler to set.
-     *
-     * @return The updated {@link EventHubClientBuilder} object.
-     */
-    EventHubClientBuilder scheduler(Scheduler scheduler) {
-        this.scheduler = scheduler;
         return this;
     }
 
@@ -526,8 +522,7 @@ public class EventHubClientBuilder {
 
         final TracerProvider tracerProvider = new TracerProvider(ServiceLoader.load(Tracer.class));
 
-        return new EventHubAsyncClient(processor, tracerProvider, messageSerializer, scheduler,
-            isSharedConnection.get(), this::onClientClose);
+        return new EventHubAsyncClient(processor, tracerProvider, isSharedConnection.get(), this::onClientClose);
     }
 
     /**
@@ -598,19 +593,37 @@ public class EventHubClientBuilder {
         return tokenCredential;
     }
 
-    private EventHubConnectionProcessor buildConnectionProcessor() {
-        final ConnectionOptions connectionOptions = getConnectionOptions();
-        final TokenManagerProvider tokenManagerProvider = new AzureTokenManagerProvider(
-            connectionOptions.getAuthorizationType(), connectionOptions.getFullyQualifiedNamespace(),
-            ClientConstants.AZURE_ACTIVE_DIRECTORY_SCOPE);
-        final ReactorProvider provider = new ReactorProvider();
-        final ReactorHandlerProvider handlerProvider = new ReactorHandlerProvider(provider);
+    private Flux<AmqpConnection> buildConnectionProcessor() {
+        final ArrayList<Header> headersToUse = new ArrayList<>();
 
-        final Map<String, String> properties = CoreUtils.getProperties(EVENTHUBS_PROPERTIES_FILE);
-        final String product = properties.getOrDefault(NAME_KEY, UNKNOWN);
-        final String clientVersion = properties.getOrDefault(VERSION_KEY, UNKNOWN);
+        StreamSupport.stream(clientOptions.getHeaders().spliterator(), false)
+            .filter(header -> NAME_KEY.equals(header.getName()))
+            .findFirst()
+            .ifPresentOrElse(
+                existing -> logger.info("ClientOptions already contain '{}' key. Values: {}", existing.getName(),
+                    existing.getValue()),
+                () -> headersToUse.add(productHeader));
 
-        final Flux<EventHubAmqpConnection> connectionFlux = Flux.create(sink -> {
+        StreamSupport.stream(clientOptions.getHeaders().spliterator(), false)
+            .filter(header -> VERSION_KEY.equals(header.getName()))
+            .findFirst()
+            .ifPresentOrElse(
+                existing -> logger.info("ClientOptions already contain '{}' key. Values: {}", existing.getName(),
+                    existing.getValue()),
+                () -> headersToUse.add(versionHeader));
+
+        if (!headersToUse.isEmpty()) {
+            clientOptions.getHeaders().forEach(header -> headersToUse.add(header));
+        }
+
+        final ClientOptions clientOptionsToUse = clientOptions != null ? clientOptions : new ClientOptions();
+        clientOptionsToUse.setHeaders(headersToUse);
+
+        if (proxyOptions == null) {
+            getDefaultProxyConfiguration(configuration);
+        }
+
+        return Flux.create(sink -> {
             sink.onRequest(request -> {
 
                 if (request == 0) {
@@ -621,40 +634,15 @@ public class EventHubClientBuilder {
                     return;
                 }
 
-                final String connectionId = StringUtil.getRandomString("MF");
-                logger.info("connectionId[{}]: Emitting a single connection.", connectionId);
-
-                final EventHubAmqpConnection connection = new EventHubReactorAmqpConnection(connectionId,
-                    connectionOptions, eventHubName, provider, handlerProvider, tokenManagerProvider, messageSerializer,
-                    product, clientVersion);
-                sink.next(connection);
+                final AmqpConnection amqpConnection = connectionBuilder.buildConnection();
+//                final String connectionId = StringUtil.getRandomString("MF");
+                logger.info("connectionId[{}]: Emitting a single connection.", amqpConnection.getId());
+                sink.next(amqpConnection);
             });
         });
-
-        return connectionFlux.subscribeWith(new EventHubConnectionProcessor(
-            connectionOptions.getFullyQualifiedNamespace(), eventHubName, connectionOptions.getRetry()));
     }
 
     private ConnectionOptions getConnectionOptions() {
-        configuration = configuration == null ?  : configuration;
-
-        if (credentials == null) {
-            final String connectionString = configuration.get(AZURE_EVENT_HUBS_CONNECTION_STRING);
-
-            if (CoreUtils.isNullOrEmpty(connectionString)) {
-                throw logger.logExceptionAsError(new IllegalArgumentException("Credentials have not been set. "
-                    + "They can be set using: connectionString(String), connectionString(String, String), "
-                    + "credentials(String, String, TokenCredential), or setting the environment variable '"
-                    + AZURE_EVENT_HUBS_CONNECTION_STRING + "' with a connection string"));
-            }
-
-            connectionString(connectionString);
-        }
-
-        if (proxyOptions == null) {
-            proxyOptions = getDefaultProxyConfiguration(configuration);
-        }
-
         // If the proxy has been configured by the user but they have overridden the TransportType with something that
         // is not AMQP_WEB_SOCKETS.
         if (proxyOptions != null && proxyOptions.isProxyAddressConfigured()
