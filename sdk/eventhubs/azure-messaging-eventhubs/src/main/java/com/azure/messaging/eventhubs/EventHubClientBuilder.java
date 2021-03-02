@@ -503,25 +503,16 @@ public class EventHubClientBuilder {
      *     specified but the transport type is not {@link AmqpTransportType#AMQP_WEB_SOCKETS web sockets}.
      */
     EventHubAsyncClient buildAsyncClient() {
-        if (retryOptions == null) {
-            retryOptions = DEFAULT_RETRY;
-        }
-
-        if (scheduler == null) {
-            scheduler = Schedulers.elastic();
-        }
-
         if (prefetchCount == null) {
             prefetchCount = DEFAULT_PREFETCH_COUNT;
         }
 
-        final MessageSerializer messageSerializer = new EventHubMessageSerializer();
-
+        final EventHubMessageSerializer messageSerializer = new EventHubMessageSerializer();
         final EventHubConnectionProcessor processor;
         if (isSharedConnection.get()) {
             synchronized (connectionLock) {
                 if (eventHubConnectionProcessor == null) {
-                    eventHubConnectionProcessor = buildConnectionProcessor(messageSerializer);
+                    eventHubConnectionProcessor = buildConnectionProcessor();
                 }
             }
 
@@ -530,7 +521,7 @@ public class EventHubClientBuilder {
             final int numberOfOpenClients = openClients.incrementAndGet();
             logger.info("# of open clients with shared connection: {}", numberOfOpenClients);
         } else {
-            processor = buildConnectionProcessor(messageSerializer);
+            processor = buildConnectionProcessor();
         }
 
         final TracerProvider tracerProvider = new TracerProvider(ServiceLoader.load(Tracer.class));

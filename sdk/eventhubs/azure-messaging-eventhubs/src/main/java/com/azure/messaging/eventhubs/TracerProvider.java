@@ -1,6 +1,4 @@
-// Copyright (c) Microsoft Corporation. All rights reserved.
-// Licensed under the MIT License.
-package com.azure.core.amqp.implementation;
+package com.azure.messaging.eventhubs;
 
 import com.azure.core.amqp.exception.AmqpException;
 import com.azure.core.util.Context;
@@ -11,18 +9,18 @@ import reactor.core.publisher.Signal;
 
 import java.util.Objects;
 
-public class TracerProvider {
+class TracerProvider {
     private final ClientLogger logger = new ClientLogger(TracerProvider.class);
     private Tracer tracer;
 
-    public TracerProvider(Iterable<Tracer> tracers) {
+    TracerProvider(Iterable<Tracer> tracers) {
         Objects.requireNonNull(tracers, "'tracers' cannot be null.");
         if (tracers.iterator().hasNext()) {
             tracer = tracers.iterator().next();
         }
     }
 
-    public boolean isEnabled() {
+    boolean isEnabled() {
         return tracer != null;
     }
 
@@ -38,7 +36,7 @@ public class TracerProvider {
      * @param processKind the invoking process type.
      * @return An updated context object.
      */
-    public Context startSpan(String serviceBaseName, Context context, ProcessKind processKind) {
+    Context startSpan(String serviceBaseName, Context context, ProcessKind processKind) {
         if (tracer == null) {
             return context;
         }
@@ -56,7 +54,7 @@ public class TracerProvider {
      * @param context Additional metadata that is passed through the call stack.
      * @param signal The signal indicates the status and contains the metadata we need to end the tracing span.
      */
-    public void endSpan(Context context, Signal<Void> signal) {
+    void endSpan(Context context, Signal<Void> signal) {
         if (tracer == null) {
             return;
         }
@@ -93,7 +91,7 @@ public class TracerProvider {
      *
      * @param context Additional metadata that is passed through the call stack.
      */
-    public void addSpanLinks(Context context) {
+    void addSpanLinks(Context context) {
         if (tracer == null) {
             return;
         }
@@ -106,7 +104,7 @@ public class TracerProvider {
      *
      * @param diagnosticId Unique identifier of an external call from producer to the queue.
      */
-    public Context extractContext(String diagnosticId, Context context) {
+    Context extractContext(String diagnosticId, Context context) {
         if (tracer == null) {
             return context;
         }
@@ -121,7 +119,7 @@ public class TracerProvider {
      * @param serviceBaseName the service name to be appended to the span name.
      * @param context Additional metadata containing the span name for creating the span builder.
      */
-    public Context getSharedSpanBuilder(String serviceBaseName, Context context) {
+    Context getSharedSpanBuilder(String serviceBaseName, Context context) {
         if (tracer == null) {
             return context;
         }
