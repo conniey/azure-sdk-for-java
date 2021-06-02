@@ -5,6 +5,7 @@ package com.azure.core.amqp;
 
 import com.azure.core.amqp.models.AmqpAnnotatedMessage;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 /**
  * A unidirectional link from the client to the message broker that consumes messages.
@@ -22,19 +23,21 @@ public interface AmqpReceiveLink extends AmqpLink {
     Flux<AmqpAnnotatedMessage> receive();
 
     /**
-     * Schedule to adds the specified number of credits to the link.
+     * Adds the specified number of credits to the link.
      *
      * The number of link credits initialises to zero. It is the application's responsibility to call this method to
      * allow the receiver to receive {@code credits} more deliveries.
      *
      * @param credits Number of credits to add to the receive link.
+     *
+     * @return Mono that completes when the credits are added.
      */
-    void addCredits(int credits);
+    Mono<Void> addCredits(int credits);
 
     /**
-     * Gets the current number of credits this link has.
+     * Gets a stream with the current number of credits this link has.
      *
      * @return The number of credits (deliveries) this link has.
      */
-    int getCredits();
+    Flux<Integer> getCredits();
 }
