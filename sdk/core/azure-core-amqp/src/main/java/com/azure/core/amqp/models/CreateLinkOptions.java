@@ -17,7 +17,7 @@ import java.util.Map;
  * @see AmqpSession#createConsumer(String, String, Duration, AmqpRetryPolicy, CreateLinkOptions)
  */
 @Fluent
-public class CreateLinkOptions {
+public final class CreateLinkOptions {
     private AmqpLinkSource linkSource;
     private AmqpLinkTarget linkTarget;
     private Map<String, Object> linkProperties;
