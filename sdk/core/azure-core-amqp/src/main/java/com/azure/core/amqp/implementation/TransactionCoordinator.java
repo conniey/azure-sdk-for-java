@@ -6,11 +6,11 @@ package com.azure.core.amqp.implementation;
 import com.azure.core.amqp.AmqpTransaction;
 import com.azure.core.amqp.AmqpTransactionCoordinator;
 import com.azure.core.util.logging.ClientLogger;
+import com.azure.core.amqp.models.TransactionalDeliveryOutcome;
 import org.apache.qpid.proton.Proton;
 import org.apache.qpid.proton.amqp.Binary;
 import org.apache.qpid.proton.amqp.messaging.AmqpValue;
 import org.apache.qpid.proton.amqp.transaction.Declare;
-import org.apache.qpid.proton.amqp.transaction.Declared;
 import org.apache.qpid.proton.amqp.transaction.Discharge;
 import org.apache.qpid.proton.amqp.transport.DeliveryState;
 import org.apache.qpid.proton.engine.impl.DeliveryImpl;
@@ -23,9 +23,7 @@ import static com.azure.core.amqp.implementation.ClientConstants.MAX_AMQP_HEADER
  * Encapsulates transaction functions.
  */
 final class TransactionCoordinator implements AmqpTransactionCoordinator {
-
     private final ClientLogger logger = new ClientLogger(TransactionCoordinator.class);
-
     private final ReactorSender sendLink;
     private final MessageSerializer messageSerializer;
 
@@ -59,14 +57,10 @@ final class TransactionCoordinator implements AmqpTransactionCoordinator {
 
         return sendLink.send(bytes, encodedSize, DeliveryImpl.DEFAULT_MESSAGE_FORMAT, null)
             .handle((outcome, sink) -> {
-                final DeliveryState.DeliveryStateType stateType = outcome.getType();
-                switch (stateType) {
-                    case Accepted:
-                        sink.complete();
-                        break;
-                    default:
-                        sink.error(new IllegalArgumentException("Expected a Accepted, received: " + outcome));
-                        logger.warning("Unknown DeliveryState type: {}", stateType);
+                if (outcome.getDeliveryState() == com.azure.core.amqp.models.DeliveryState.ACCEPTED) {
+                    sink.complete();
+                } else {
+                    sink.error(new IllegalArgumentException("Expected Accepted delivery outcome. Actual: " + outcome));
                 }
             });
     }
@@ -79,7 +73,7 @@ final class TransactionCoordinator implements AmqpTransactionCoordinator {
     @Override
     public Mono<AmqpTransaction> declare() {
         final Message message = Proton.message();
-        Declare declare = new Declare();
+        final Declare declare = new Declare();
         message.setBody(new AmqpValue(declare));
 
         final int payloadSize = messageSerializer.getSize(message);
@@ -90,17 +84,13 @@ final class TransactionCoordinator implements AmqpTransactionCoordinator {
 
         return sendLink.send(bytes, encodedSize, DeliveryImpl.DEFAULT_MESSAGE_FORMAT, null)
             .handle((outcome, sink) -> {
-                final DeliveryState.DeliveryStateType stateType = outcome.getType();
-                switch (stateType) {
-                    case Declared:
-                        Binary transactionId;
-                        Declared declared = (Declared) outcome;
-                        transactionId = declared.getTxnId();
-                        sink.next(new AmqpTransaction(transactionId.asByteBuffer()));
-                        break;
-                    default:
-                        sink.error(new IllegalArgumentException("Expected a Declared, received: " + outcome));
-                        logger.warning("Unknown DeliveryState type: {}", stateType);
+                if (outcome instanceof TransactionalDeliveryOutcome) {
+                    final TransactionalDeliveryOutcome transaction = (TransactionalDeliveryOutcome) outcome;
+                    sink.next(new AmqpTransaction(transaction.getTransactionId()));
+                } else {
+                    sink.error(new IllegalArgumentException(String.format(
+                        "Expected Declared transaction outcome. Actual: %s. Type: %s", outcome.getDeliveryState(),
+                        outcome)));
                 }
             });
     }
