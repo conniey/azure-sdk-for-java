@@ -9,6 +9,7 @@ import com.azure.core.amqp.AmqpReceiveLink;
 import com.azure.core.amqp.AmqpRetryOptions;
 import com.azure.core.amqp.exception.AmqpErrorCondition;
 import com.azure.core.amqp.implementation.handler.ReceiveLinkHandler;
+import com.azure.core.amqp.models.AmqpAnnotatedMessage;
 import com.azure.core.util.AsyncCloseable;
 import com.azure.core.util.logging.ClientLogger;
 import org.apache.qpid.proton.Proton;
@@ -27,7 +28,6 @@ import reactor.core.scheduler.Schedulers;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.Objects;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -52,6 +52,7 @@ public class ReactorReceiver implements AmqpReceiveLink, AsyncCloseable, AutoClo
     private final AmqpRetryOptions retryOptions;
     private final ClientLogger logger = new ClientLogger(ReactorReceiver.class);
     private final Flux<AmqpEndpointState> endpointStates;
+    private final Sinks.Many<Integer> credits = Sinks.many().multicast().directBestEffort();
 
     private final AtomicReference<Supplier<Integer>> creditSupplier = new AtomicReference<>();
 
@@ -80,6 +81,9 @@ public class ReactorReceiver implements AmqpReceiveLink, AsyncCloseable, AutoClo
                                 return;
                             }
 
+                            credits.emitNext(creditsLeft, Sinks.EmitFailureHandler.FAIL_FAST);
+
+                            // TODO.
                             final Supplier<Integer> supplier = creditSupplier.get();
                             final Integer credits = supplier.get();
 
@@ -167,8 +171,8 @@ public class ReactorReceiver implements AmqpReceiveLink, AsyncCloseable, AutoClo
     }
 
     @Override
-    public Flux<Message> receive() {
-        return messagesProcessor;
+    public Flux<AmqpAnnotatedMessage> receive() {
+        return messagesProcessor.map(message -> MessageUtils.toAmqpAnnotatedMessage(message));
     }
 
     @Override
@@ -192,14 +196,8 @@ public class ReactorReceiver implements AmqpReceiveLink, AsyncCloseable, AutoClo
     }
 
     @Override
-    public int getCredits() {
-        return receiver.getRemoteCredit();
-    }
-
-    @Override
-    public void setEmptyCreditListener(Supplier<Integer> creditSupplier) {
-        Objects.requireNonNull(creditSupplier, "'creditSupplier' cannot be null.");
-        this.creditSupplier.set(creditSupplier);
+    public Flux<Integer> getCredits() {
+        return credits.asFlux();
     }
 
     @Override
@@ -298,6 +296,7 @@ public class ReactorReceiver implements AmqpReceiveLink, AsyncCloseable, AutoClo
         });
 
         subscriptions.dispose();
+        credits.emitComplete(Sinks.EmitFailureHandler.FAIL_FAST);
 
         if (tokenManager != null) {
             tokenManager.close();
