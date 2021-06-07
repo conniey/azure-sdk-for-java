@@ -4,6 +4,7 @@
 package com.azure.core.amqp;
 
 import com.azure.core.amqp.exception.AmqpException;
+import com.azure.core.amqp.models.CreateLinkOptions;
 import com.azure.core.util.AsyncCloseable;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
@@ -52,6 +53,22 @@ public interface AmqpSession extends Disposable, AsyncCloseable {
      * @return A newly created AMQP link.
      */
     Mono<AmqpLink> createConsumer(String linkName, String entityPath, Duration timeout, AmqpRetryPolicy retryPolicy);
+
+    /**
+     * Creates a new AMQP send link that consumes messages from the AMQP message broker.
+     *
+     * @param linkName Name of the link.
+     * @param entityPath The entity path this link connects to, so that it may read events from the message broker.
+     * @param timeout Timeout required for creating and opening an AMQP link.
+     * @param retryPolicy The retry policy to use when consuming messages.
+     * @param createLinkOptions Options used for creating link.
+     *
+     * @return A newly created AMQP receive link.
+     */
+    default Mono<AmqpReceiveLink> createConsumer(String linkName, String entityPath, Duration timeout,
+        AmqpRetryPolicy retryPolicy, CreateLinkOptions createLinkOptions) {
+        return createConsumer(linkName, entityPath, timeout, retryPolicy).cast(AmqpReceiveLink.class);
+    }
 
     /**
      * Removes an {@link AmqpLink} with the given {@code linkName}.
