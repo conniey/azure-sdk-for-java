@@ -278,7 +278,6 @@ class ReactorReceiverTest {
         }).when(reactorDispatcher).invoke(any(Runnable.class));
 
         when(creditSupplier.get()).thenReturn(creditsToAdd);
-        reactorReceiver.setEmptyCreditListener(creditSupplier);
 
         doAnswer(invocationOnMock -> {
             final Runnable work = invocationOnMock.getArgument(0);
@@ -292,10 +291,10 @@ class ReactorReceiverTest {
             .assertNext(message -> {
                 Assertions.assertNotNull(message.getMessageAnnotations());
 
-                final Map<Symbol, Object> values = message.getMessageAnnotations().getValue();
-                assertTrue(values.containsKey(Symbol.getSymbol(AmqpMessageConstant.OFFSET_ANNOTATION_NAME.getValue())));
-                assertTrue(values.containsKey(Symbol.getSymbol(AmqpMessageConstant.SEQUENCE_NUMBER_ANNOTATION_NAME.getValue())));
-                assertTrue(values.containsKey(Symbol.getSymbol(AmqpMessageConstant.ENQUEUED_TIME_UTC_ANNOTATION_NAME.getValue())));
+                final Map<String, Object> values = message.getMessageAnnotations();
+                assertTrue(values.containsKey(AmqpMessageConstant.OFFSET_ANNOTATION_NAME.getValue()));
+                assertTrue(values.containsKey(AmqpMessageConstant.SEQUENCE_NUMBER_ANNOTATION_NAME.getValue()));
+                assertTrue(values.containsKey(AmqpMessageConstant.ENQUEUED_TIME_UTC_ANNOTATION_NAME.getValue()));
             })
             .thenCancel()
             .verify();
