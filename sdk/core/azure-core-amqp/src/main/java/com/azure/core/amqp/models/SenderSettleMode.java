@@ -3,8 +3,6 @@
 
 package com.azure.core.amqp.models;
 
-import com.azure.core.util.logging.ClientLogger;
-
 /**
  * The sender settlement types.
  *
@@ -56,9 +54,8 @@ public enum SenderSettleMode {
             case 2:
                 return SenderSettleMode.MIXED;
             default:
-                final ClientLogger logger = new ClientLogger(SenderSettleMode.class);
-                throw logger.logExceptionAsError(new IllegalArgumentException(
-                    "The value can be only 0 (for UNSETTLED), 1 (for SETTLED) and 2 (for MIXED)"));
+                throw new IllegalArgumentException(
+                    "The value can be only 0 (for UNSETTLED), 1 (for SETTLED) and 2 (for MIXED)");
         }
     }
 }

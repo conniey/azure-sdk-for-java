@@ -3,8 +3,6 @@
 
 package com.azure.core.amqp.models;
 
-import com.azure.core.util.logging.ClientLogger;
-
 /**
  * The receiver settle mode.
  *
@@ -53,9 +51,8 @@ public enum ReceiverSettleMode {
             case 1:
                 return ReceiverSettleMode.SECOND;
             default:
-                final ClientLogger logger = new ClientLogger(ReceiverSettleMode.class);
-                throw logger.logExceptionAsError(new IllegalArgumentException(
-                    "The value can be only 0 (for FIRST), 1 (for SECOND)."));
+                throw new IllegalArgumentException(
+                    "The value can be only 0 (for FIRST), 1 (for SECOND).");
         }
     }
 }
