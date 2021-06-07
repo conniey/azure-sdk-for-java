@@ -5,15 +5,16 @@ package com.azure.messaging.eventhubs;
 
 import com.azure.core.amqp.AmqpEndpointState;
 import com.azure.core.amqp.AmqpRetryOptions;
+import com.azure.core.amqp.AmqpSendLink;
 import com.azure.core.amqp.AmqpTransportType;
 import com.azure.core.amqp.ProxyOptions;
 import com.azure.core.amqp.exception.AmqpErrorCondition;
-import com.azure.core.amqp.exception.AmqpErrorContext;
 import com.azure.core.amqp.exception.AmqpException;
-import com.azure.core.amqp.implementation.AmqpSendLink;
 import com.azure.core.amqp.implementation.ConnectionOptions;
 import com.azure.core.amqp.implementation.MessageSerializer;
 import com.azure.core.amqp.implementation.TracerProvider;
+import com.azure.core.amqp.models.AmqpAnnotatedMessage;
+import com.azure.core.amqp.models.AmqpMessageBodyType;
 import com.azure.core.amqp.models.CbsAuthorizationType;
 import com.azure.core.credential.TokenCredential;
 import com.azure.core.util.ClientOptions;
@@ -25,9 +26,7 @@ import com.azure.messaging.eventhubs.implementation.EventHubAmqpConnection;
 import com.azure.messaging.eventhubs.implementation.EventHubConnectionProcessor;
 import com.azure.messaging.eventhubs.models.CreateBatchOptions;
 import com.azure.messaging.eventhubs.models.SendOptions;
-import org.apache.qpid.proton.amqp.messaging.Section;
 import org.apache.qpid.proton.engine.SslDomain;
-import org.apache.qpid.proton.message.Message;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -83,9 +82,9 @@ public class EventHubProducerClientTest {
     @Mock
     private Runnable onClientClosed;
     @Captor
-    private ArgumentCaptor<Message> singleMessageCaptor;
+    private ArgumentCaptor<AmqpAnnotatedMessage> singleMessageCaptor;
     @Captor
-    private ArgumentCaptor<List<Message>> messagesCaptor;
+    private ArgumentCaptor<List<AmqpAnnotatedMessage>> messagesCaptor;
 
     private EventHubProducerAsyncClient asyncProducer;
     private EventHubConnectionProcessor connectionProcessor;
@@ -93,10 +92,9 @@ public class EventHubProducerClientTest {
     @BeforeEach
     public void setup() {
         MockitoAnnotations.initMocks(this);
-        when(sendLink.getLinkSize()).thenReturn(Mono.just(ClientConstants.MAX_MESSAGE_LENGTH_BYTES));
-        when(sendLink.getErrorContext()).thenReturn(new AmqpErrorContext("test-namespace"));
+        when(sendLink.getMaxMessageSizeInBytes()).thenReturn(Mono.just((long) ClientConstants.MAX_MESSAGE_LENGTH_BYTES));
         when(sendLink.send(anyList())).thenReturn(Mono.empty());
-        when(sendLink.send(any(Message.class))).thenReturn(Mono.empty());
+        when(sendLink.send(any(AmqpAnnotatedMessage.class))).thenReturn(Mono.empty());
 
         final TracerProvider tracerProvider = new TracerProvider(Collections.emptyList());
 
@@ -145,11 +143,11 @@ public class EventHubProducerClientTest {
         }
 
         // Assert
-        verify(sendLink, times(1)).send(any(Message.class));
+        verify(sendLink, times(1)).send(any(AmqpAnnotatedMessage.class));
         verify(sendLink).send(singleMessageCaptor.capture());
 
-        final Message message = singleMessageCaptor.getValue();
-        Assertions.assertEquals(Section.SectionType.Data, message.getBody().getType());
+        final AmqpAnnotatedMessage message = singleMessageCaptor.getValue();
+        Assertions.assertEquals(AmqpMessageBodyType.DATA, message.getBody().getBodyType());
     }
 
     /**
@@ -269,7 +267,10 @@ public class EventHubProducerClientTest {
         // EC is the prefix they use when creating a link that sends to the service round-robin.
         when(connection.createSendLink(eq(EVENT_HUB_NAME), eq(EVENT_HUB_NAME), any()))
             .thenReturn(Mono.just(sendLink));
-        when(sendLink.getLinkSize()).thenReturn(Mono.just(1024));
+        when(sendLink.getMaxMessageSizeInBytes()).thenReturn(Mono.just(1024L));
+        when(sendLink.getLinkName()).thenReturn("NAME");
+        when(sendLink.getEntityPath()).thenReturn("entity-path");
+        when(sendLink.getHostname()).thenReturn("host-name");
         TracerProvider tracerProvider = new TracerProvider(Collections.emptyList());
         final EventHubProducerAsyncClient asyncProducer = new EventHubProducerAsyncClient(HOSTNAME, EVENT_HUB_NAME,
             connectionProcessor, retryOptions, tracerProvider, messageSerializer, Schedulers.parallel(), false, onClientClosed);
@@ -317,10 +318,10 @@ public class EventHubProducerClientTest {
         // Assert
         verify(sendLink).send(messagesCaptor.capture());
 
-        final List<Message> messagesSent = messagesCaptor.getValue();
+        final List<AmqpAnnotatedMessage> messagesSent = messagesCaptor.getValue();
         Assertions.assertEquals(count, messagesSent.size());
 
-        messagesSent.forEach(message -> Assertions.assertEquals(Section.SectionType.Data, message.getBody().getType()));
+        messagesSent.forEach(message -> Assertions.assertEquals(AmqpMessageBodyType.DATA, message.getBody().getBodyType()));
 
         verifyNoInteractions(onClientClosed);
     }
@@ -339,7 +340,7 @@ public class EventHubProducerClientTest {
         int maxEventPayload = maxLinkSize - eventOverhead;
 
         final AmqpSendLink link = mock(AmqpSendLink.class);
-        when(link.getLinkSize()).thenReturn(Mono.just(maxLinkSize));
+        when(link.getMaxMessageSizeInBytes()).thenReturn(Mono.just((long) maxLinkSize));
 
         // EC is the prefix they use when creating a link that sends to the service round-robin.
         when(connection.createSendLink(eq(EVENT_HUB_NAME), eq(EVENT_HUB_NAME), any()))
@@ -360,7 +361,7 @@ public class EventHubProducerClientTest {
         Assertions.assertFalse(batch.tryAdd(tooLargeEvent));
         Assertions.assertTrue(batch.tryAdd(event));
 
-        verify(link, times(1)).getLinkSize();
+        verify(link, times(1)).getMaxMessageSizeInBytes();
     }
 
     /**
@@ -379,7 +380,7 @@ public class EventHubProducerClientTest {
         final EventHubProducerClient producer = new EventHubProducerClient(asyncProducer, retryOptions.getTryTimeout());
 
         final AmqpSendLink link = mock(AmqpSendLink.class);
-        when(link.getLinkSize()).thenReturn(Mono.just(ClientConstants.MAX_MESSAGE_LENGTH_BYTES));
+        when(link.getMaxMessageSizeInBytes()).thenReturn(Mono.just((long) ClientConstants.MAX_MESSAGE_LENGTH_BYTES));
 
         // EC is the prefix they use when creating a link that sends to the service round-robin.
         when(connection.createSendLink(eq(EVENT_HUB_NAME), eq(EVENT_HUB_NAME), any()))

@@ -6,16 +6,18 @@ package com.azure.messaging.eventhubs;
 import com.azure.core.amqp.AmqpEndpointState;
 import com.azure.core.amqp.AmqpRetryMode;
 import com.azure.core.amqp.AmqpRetryOptions;
+import com.azure.core.amqp.AmqpSendLink;
 import com.azure.core.amqp.AmqpTransportType;
 import com.azure.core.amqp.ProxyOptions;
 import com.azure.core.amqp.exception.AmqpErrorCondition;
 import com.azure.core.amqp.exception.AmqpErrorContext;
 import com.azure.core.amqp.exception.AmqpException;
-import com.azure.core.amqp.implementation.AmqpSendLink;
 import com.azure.core.amqp.implementation.ConnectionOptions;
-import com.azure.core.amqp.implementation.MessageSerializer;
 import com.azure.core.amqp.implementation.TracerProvider;
+import com.azure.core.amqp.models.AmqpAnnotatedMessage;
+import com.azure.core.amqp.models.AmqpMessageBodyType;
 import com.azure.core.amqp.models.CbsAuthorizationType;
+import com.azure.core.amqp.models.DeliveryOutcome;
 import com.azure.core.credential.TokenCredential;
 import com.azure.core.util.ClientOptions;
 import com.azure.core.util.Context;
@@ -27,9 +29,7 @@ import com.azure.messaging.eventhubs.implementation.EventHubAmqpConnection;
 import com.azure.messaging.eventhubs.implementation.EventHubConnectionProcessor;
 import com.azure.messaging.eventhubs.models.CreateBatchOptions;
 import com.azure.messaging.eventhubs.models.SendOptions;
-import org.apache.qpid.proton.amqp.messaging.Section;
 import org.apache.qpid.proton.engine.SslDomain;
-import org.apache.qpid.proton.message.Message;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -106,12 +106,12 @@ class EventHubProducerAsyncClientTest {
     private Runnable onClientClosed;
 
     @Captor
-    private ArgumentCaptor<Message> singleMessageCaptor;
+    private ArgumentCaptor<AmqpAnnotatedMessage> singleMessageCaptor;
     @Captor
-    private ArgumentCaptor<List<Message>> messagesCaptor;
+    private ArgumentCaptor<List<AmqpAnnotatedMessage>> messagesCaptor;
 
     private final ClientLogger logger = new ClientLogger(EventHubProducerAsyncClient.class);
-    private final MessageSerializer messageSerializer = new EventHubMessageSerializer();
+    private final EventHubMessageSerializer messageSerializer = new EventHubMessageSerializer();
     private final AmqpRetryOptions retryOptions = new AmqpRetryOptions()
         .setDelay(Duration.ofMillis(500))
         .setMode(AmqpRetryMode.FIXED)
@@ -156,9 +156,9 @@ class EventHubProducerAsyncClientTest {
         producer = new EventHubProducerAsyncClient(HOSTNAME, EVENT_HUB_NAME, connectionProcessor, retryOptions,
             tracerProvider, messageSerializer, testScheduler, false, onClientClosed);
 
-        when(sendLink.getLinkSize()).thenReturn(Mono.just(ClientConstants.MAX_MESSAGE_LENGTH_BYTES));
-        when(sendLink2.getLinkSize()).thenReturn(Mono.just(ClientConstants.MAX_MESSAGE_LENGTH_BYTES));
-        when(sendLink3.getLinkSize()).thenReturn(Mono.just(ClientConstants.MAX_MESSAGE_LENGTH_BYTES));
+        when(sendLink.getMaxMessageSizeInBytes()).thenReturn(Mono.just((long) ClientConstants.MAX_MESSAGE_LENGTH_BYTES));
+        when(sendLink2.getMaxMessageSizeInBytes()).thenReturn(Mono.just((long) ClientConstants.MAX_MESSAGE_LENGTH_BYTES));
+        when(sendLink3.getMaxMessageSizeInBytes()).thenReturn(Mono.just((long) ClientConstants.MAX_MESSAGE_LENGTH_BYTES));
     }
 
     @AfterEach
@@ -197,10 +197,10 @@ class EventHubProducerAsyncClientTest {
         // Assert
         verify(sendLink).send(messagesCaptor.capture());
 
-        final List<Message> messagesSent = messagesCaptor.getValue();
+        final List<AmqpAnnotatedMessage> messagesSent = messagesCaptor.getValue();
         Assertions.assertEquals(count, messagesSent.size());
 
-        messagesSent.forEach(message -> Assertions.assertEquals(Section.SectionType.Data, message.getBody().getType()));
+        messagesSent.forEach(message -> Assertions.assertEquals(AmqpMessageBodyType.DATA, message.getBody().getBodyType()));
     }
 
     /**
@@ -216,18 +216,18 @@ class EventHubProducerAsyncClientTest {
         when(connection.createSendLink(eq(EVENT_HUB_NAME), eq(EVENT_HUB_NAME), eq(retryOptions)))
             .thenReturn(Mono.just(sendLink));
 
-        when(sendLink.send(any(Message.class))).thenReturn(Mono.empty());
+        when(sendLink.send(any(AmqpAnnotatedMessage.class))).thenReturn(Mono.empty());
 
         // Act
         StepVerifier.create(producer.send(testData, options))
             .verifyComplete();
 
         // Assert
-        verify(sendLink, times(1)).send(any(Message.class));
+        verify(sendLink, times(1)).send(any(AmqpAnnotatedMessage.class));
         verify(sendLink).send(singleMessageCaptor.capture());
 
-        final Message message = singleMessageCaptor.getValue();
-        Assertions.assertEquals(Section.SectionType.Data, message.getBody().getType());
+        final AmqpAnnotatedMessage message = singleMessageCaptor.getValue();
+        Assertions.assertEquals(AmqpMessageBodyType.DATA, message.getBody().getBodyType());
     }
 
     /**
@@ -254,7 +254,9 @@ class EventHubProducerAsyncClientTest {
         when(connection.createSendLink(eq(EVENT_HUB_NAME), eq(EVENT_HUB_NAME), eq(retryOptions)))
             .thenReturn(Mono.just(sendLink));
 
-        when(sendLink.send(any(Message.class))).thenReturn(Mono.<Void>empty().publishOn(Schedulers.single()));
+        when(sendLink.send(any(AmqpAnnotatedMessage.class))).thenReturn(
+            Mono.<DeliveryOutcome>empty().publishOn(Schedulers.single()));
+
         Assertions.assertTrue(semaphore.tryAcquire(30, TimeUnit.SECONDS));
 
         // Act
@@ -274,11 +276,11 @@ class EventHubProducerAsyncClientTest {
         // Assert
         Assertions.assertTrue(semaphore.tryAcquire(30, TimeUnit.SECONDS));
 
-        verify(sendLink).send(any(Message.class));
+        verify(sendLink).send(any(AmqpAnnotatedMessage.class));
         verify(sendLink).send(singleMessageCaptor.capture());
 
-        final Message message = singleMessageCaptor.getValue();
-        Assertions.assertEquals(Section.SectionType.Data, message.getBody().getType());
+        final AmqpAnnotatedMessage message = singleMessageCaptor.getValue();
+        Assertions.assertEquals(AmqpMessageBodyType.DATA, message.getBody().getBodyType());
 
         verifyNoInteractions(onClientClosed);
     }
@@ -423,8 +425,8 @@ class EventHubProducerAsyncClientTest {
             new AmqpErrorContext("test-namespace"));
 
         // Send a transient error to attempt retry.
-        when(sendLink.send(argThat((Message message) ->
-            message.getApplicationProperties().getValue().containsKey(failureKey))))
+        when(sendLink.send(argThat((AmqpAnnotatedMessage message) ->
+            message.getApplicationProperties().containsKey(failureKey))))
             .thenReturn(Mono.error(error))
             .thenReturn(Mono.error(error))
             .thenReturn(Mono.empty());
@@ -448,9 +450,9 @@ class EventHubProducerAsyncClientTest {
     @Test
     void sendTooManyMessages() {
         // Arrange
-        int maxLinkSize = 1024;
+        long maxLinkSize = 1024;
         final AmqpSendLink link = mock(AmqpSendLink.class);
-        when(link.getLinkSize()).thenReturn(Mono.just(maxLinkSize));
+        when(link.getMaxMessageSizeInBytes()).thenReturn(Mono.just(maxLinkSize));
 
         // EC is the prefix they use when creating a link that sends to the service round-robin.
         when(connection.createSendLink(eq(EVENT_HUB_NAME), eq(EVENT_HUB_NAME), eq(retryOptions)))
@@ -467,7 +469,7 @@ class EventHubProducerAsyncClientTest {
             .verifyErrorMatches(error -> error instanceof AmqpException
                 && ((AmqpException) error).getErrorCondition() == AmqpErrorCondition.LINK_PAYLOAD_SIZE_EXCEEDED);
 
-        verify(link, times(0)).send(any(Message.class));
+        verify(link, times(0)).send(any(AmqpAnnotatedMessage.class));
     }
 
     /**
@@ -484,7 +486,7 @@ class EventHubProducerAsyncClientTest {
         int maxEventPayload = maxLinkSize - eventOverhead;
 
         final AmqpSendLink link = mock(AmqpSendLink.class);
-        when(link.getLinkSize()).thenReturn(Mono.just(maxLinkSize));
+        when(link.getMaxMessageSizeInBytes()).thenReturn(Mono.just((long) maxLinkSize));
 
         // EC is the prefix they use when creating a link that sends to the service round-robin.
         when(connection.createSendLink(eq(EVENT_HUB_NAME), eq(EVENT_HUB_NAME), eq(retryOptions)))
@@ -511,7 +513,7 @@ class EventHubProducerAsyncClientTest {
             })
             .verifyComplete();
 
-        verify(link, times(2)).getLinkSize();
+        verify(link, times(2)).getMaxMessageSizeInBytes();
     }
 
     /**
@@ -529,7 +531,7 @@ class EventHubProducerAsyncClientTest {
             false, onClientClosed);
         final AmqpSendLink link = mock(AmqpSendLink.class);
 
-        when(link.getLinkSize()).thenReturn(Mono.just(ClientConstants.MAX_MESSAGE_LENGTH_BYTES));
+        when(link.getMaxMessageSizeInBytes()).thenReturn(Mono.just((long) ClientConstants.MAX_MESSAGE_LENGTH_BYTES));
         when(link.getHostname()).thenReturn(HOSTNAME);
         when(link.getEntityPath()).thenReturn(ENTITY_PATH);
 
@@ -574,7 +576,7 @@ class EventHubProducerAsyncClientTest {
         int eventPayload = maxLinkSize - 100;
 
         final AmqpSendLink link = mock(AmqpSendLink.class);
-        when(link.getLinkSize()).thenReturn(Mono.just(maxLinkSize));
+        when(link.getMaxMessageSizeInBytes()).thenReturn(Mono.just((long) maxLinkSize));
 
         // EC is the prefix they use when creating a link that sends to the service round-robin.
         when(connection.createSendLink(eq(EVENT_HUB_NAME), eq(EVENT_HUB_NAME), eq(retryOptions)))
@@ -603,7 +605,7 @@ class EventHubProducerAsyncClientTest {
         int batchSize = maxLinkSize + 10;
 
         final AmqpSendLink link = mock(AmqpSendLink.class);
-        when(link.getLinkSize()).thenReturn(Mono.just(maxLinkSize));
+        when(link.getMaxMessageSizeInBytes()).thenReturn(Mono.just((long) maxLinkSize));
 
         // EC is the prefix they use when creating a link that sends to the service round-robin.
         when(connection.createSendLink(eq(EVENT_HUB_NAME), eq(EVENT_HUB_NAME), eq(retryOptions)))
@@ -633,7 +635,7 @@ class EventHubProducerAsyncClientTest {
         int maxEventPayload = batchSize - eventOverhead;
 
         final AmqpSendLink link = mock(AmqpSendLink.class);
-        when(link.getLinkSize()).thenReturn(Mono.just(maxLinkSize));
+        when(link.getMaxMessageSizeInBytes()).thenReturn(Mono.just((long) maxLinkSize));
 
         // EC is the prefix they use when creating a link that sends to the service round-robin.
         when(connection.createSendLink(eq(EVENT_HUB_NAME), eq(EVENT_HUB_NAME), eq(retryOptions)))
@@ -708,7 +710,7 @@ class EventHubProducerAsyncClientTest {
         int maxLinkSize = 1024;
 
         final AmqpSendLink link = mock(AmqpSendLink.class);
-        when(link.getLinkSize()).thenReturn(Mono.just(maxLinkSize));
+        when(link.getMaxMessageSizeInBytes()).thenReturn(Mono.just((long) maxLinkSize));
 
         // EC is the prefix they use when creating a link that sends to the service round-robin.
         when(connection.createSendLink(eq(EVENT_HUB_NAME), eq(EVENT_HUB_NAME), eq(retryOptions)))
@@ -736,7 +738,7 @@ class EventHubProducerAsyncClientTest {
         int maxEventPayload = maxLinkSize - eventOverhead;
 
         final AmqpSendLink link = mock(AmqpSendLink.class);
-        when(link.getLinkSize()).thenReturn(Mono.just(maxLinkSize));
+        when(link.getMaxMessageSizeInBytes()).thenReturn(Mono.just((long) maxLinkSize));
 
         // EC is the prefix they use when creating a link that sends to the service round-robin.
         when(connection.createSendLink(eq(EVENT_HUB_NAME), eq(EVENT_HUB_NAME), eq(retryOptions)))
@@ -763,7 +765,7 @@ class EventHubProducerAsyncClientTest {
             })
             .verifyComplete();
 
-        verify(link, times(2)).getLinkSize();
+        verify(link, times(2)).getMaxMessageSizeInBytes();
     }
 
     /**
@@ -783,9 +785,9 @@ class EventHubProducerAsyncClientTest {
         final String partitionId2 = "my-partition-id-2";
 
         when(sendLink2.send(anyList())).thenReturn(Mono.empty());
-        when(sendLink2.getLinkSize()).thenReturn(Mono.just(ClientConstants.MAX_MESSAGE_LENGTH_BYTES));
+        when(sendLink2.getMaxMessageSizeInBytes()).thenReturn(Mono.just((long) ClientConstants.MAX_MESSAGE_LENGTH_BYTES));
         when(sendLink3.send(anyList())).thenReturn(Mono.empty());
-        when(sendLink3.getLinkSize()).thenReturn(Mono.just(ClientConstants.MAX_MESSAGE_LENGTH_BYTES));
+        when(sendLink3.getMaxMessageSizeInBytes()).thenReturn(Mono.just((long) ClientConstants.MAX_MESSAGE_LENGTH_BYTES));
 
         // EC is the prefix they use when creating a link that sends to the service round-robin.
         when(connection.createSendLink(anyString(), anyString(), any())).thenAnswer(mock -> {
@@ -816,7 +818,7 @@ class EventHubProducerAsyncClientTest {
         // Assert
         verify(sendLink).send(messagesCaptor.capture());
 
-        final List<Message> messagesSent = messagesCaptor.getValue();
+        final List<AmqpAnnotatedMessage> messagesSent = messagesCaptor.getValue();
         Assertions.assertEquals(count, messagesSent.size());
 
         verify(sendLink3, times(1)).send(anyList());
@@ -925,7 +927,7 @@ class EventHubProducerAsyncClientTest {
         when(connection2.getEndpointStates()).thenReturn(connectionState2);
         when(connection2.createSendLink(eq(EVENT_HUB_NAME), eq(EVENT_HUB_NAME), eq(retryOptions)))
             .thenReturn(Mono.just(sendLink2));
-        when(sendLink2.send(any(Message.class))).thenReturn(Mono.empty());
+        when(sendLink2.send(any(AmqpAnnotatedMessage.class))).thenReturn(Mono.empty());
 
         final DirectProcessor<AmqpEndpointState> connectionState3 = DirectProcessor.create();
         when(connection3.getEndpointStates()).thenReturn(connectionState3);
@@ -946,10 +948,10 @@ class EventHubProducerAsyncClientTest {
 
         // Assert
         verify(sendLink).send(messagesCaptor.capture());
-        final List<Message> messagesSent = messagesCaptor.getValue();
+        final List<AmqpAnnotatedMessage> messagesSent = messagesCaptor.getValue();
         Assertions.assertEquals(count, messagesSent.size());
 
-        verify(sendLink2, times(1)).send(any(Message.class));
+        verify(sendLink2, times(1)).send(any(AmqpAnnotatedMessage.class));
         verifyNoInteractions(sendLink3);
 
         verifyNoInteractions(onClientClosed);
@@ -1000,7 +1002,7 @@ class EventHubProducerAsyncClientTest {
         when(connection2.getEndpointStates()).thenReturn(connectionState2);
         when(connection2.createSendLink(eq(EVENT_HUB_NAME), eq(EVENT_HUB_NAME), eq(retryOptions)))
             .thenReturn(Mono.just(sendLink2));
-        when(sendLink2.send(any(Message.class))).thenReturn(Mono.empty());
+        when(sendLink2.send(any(AmqpAnnotatedMessage.class))).thenReturn(Mono.empty());
 
         final AmqpException nonTransientError = new AmqpException(false, AmqpErrorCondition.UNAUTHORIZED_ACCESS,
             "Test unauthorized access", new AmqpErrorContext("test-namespace"));
@@ -1026,7 +1028,7 @@ class EventHubProducerAsyncClientTest {
 
         // Assert
         verify(sendLink).send(messagesCaptor.capture());
-        final List<Message> messagesSent = messagesCaptor.getValue();
+        final List<AmqpAnnotatedMessage> messagesSent = messagesCaptor.getValue();
         Assertions.assertEquals(count, messagesSent.size());
 
         verifyNoInteractions(sendLink2);
@@ -1077,8 +1079,8 @@ class EventHubProducerAsyncClientTest {
 
         // Send a transient error, and close the original link, if we get a message that contains the "failureKey".
         // This simulates when a link is closed.
-        when(sendLink.send(argThat((Message message) -> {
-            return message.getApplicationProperties().getValue().containsKey(failureKey);
+        when(sendLink.send(argThat((AmqpAnnotatedMessage message) -> {
+            return message.getApplicationProperties().containsKey(failureKey);
         }))).thenAnswer(mock -> {
             final Throwable error = new AmqpException(true, AmqpErrorCondition.SERVER_BUSY_ERROR, "Test-message",
                 new AmqpErrorContext("test-namespace"));
@@ -1091,7 +1093,7 @@ class EventHubProducerAsyncClientTest {
         when(connection2.getEndpointStates()).thenReturn(connectionState2);
         when(connection2.createSendLink(eq(EVENT_HUB_NAME), eq(EVENT_HUB_NAME), eq(retryOptions)))
             .thenReturn(Mono.just(sendLink2));
-        when(sendLink2.send(any(Message.class))).thenReturn(Mono.empty());
+        when(sendLink2.send(any(AmqpAnnotatedMessage.class))).thenReturn(Mono.empty());
 
         // Act
         StepVerifier.create(producer.send(testData))
@@ -1102,10 +1104,10 @@ class EventHubProducerAsyncClientTest {
 
         // Assert
         verify(sendLink).send(messagesCaptor.capture());
-        final List<Message> messagesSent = messagesCaptor.getValue();
+        final List<AmqpAnnotatedMessage> messagesSent = messagesCaptor.getValue();
         Assertions.assertEquals(count, messagesSent.size());
 
-        verify(sendLink2, times(1)).send(any(Message.class));
+        verify(sendLink2, times(1)).send(any(AmqpAnnotatedMessage.class));
         verifyNoInteractions(sendLink3);
 
         verifyNoInteractions(onClientClosed);

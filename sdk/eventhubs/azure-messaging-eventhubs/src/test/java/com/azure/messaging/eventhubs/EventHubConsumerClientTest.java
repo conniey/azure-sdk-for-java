@@ -4,12 +4,12 @@
 package com.azure.messaging.eventhubs;
 
 import com.azure.core.amqp.AmqpEndpointState;
+import com.azure.core.amqp.AmqpReceiveLink;
 import com.azure.core.amqp.AmqpRetryOptions;
 import com.azure.core.amqp.AmqpTransportType;
 import com.azure.core.amqp.ProxyOptions;
-import com.azure.core.amqp.implementation.AmqpReceiveLink;
 import com.azure.core.amqp.implementation.ConnectionOptions;
-import com.azure.core.amqp.implementation.MessageSerializer;
+import com.azure.core.amqp.models.AmqpAnnotatedMessage;
 import com.azure.core.amqp.models.CbsAuthorizationType;
 import com.azure.core.credential.TokenCredential;
 import com.azure.core.util.ClientOptions;
@@ -22,7 +22,6 @@ import com.azure.messaging.eventhubs.models.LastEnqueuedEventProperties;
 import com.azure.messaging.eventhubs.models.PartitionEvent;
 import com.azure.messaging.eventhubs.models.ReceiveOptions;
 import org.apache.qpid.proton.engine.SslDomain;
-import org.apache.qpid.proton.message.Message;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -37,7 +36,7 @@ import reactor.core.scheduler.Schedulers;
 import reactor.test.publisher.TestPublisher;
 
 import java.time.Duration;
-import java.util.HashMap;
+import java.util.Date;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -49,8 +48,10 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static com.azure.messaging.eventhubs.EventHubConsumerAsyncClientTest.PARTITION_ID_HEADER;
+import static com.azure.messaging.eventhubs.TestUtils.ENQUEUED_TIME;
 import static com.azure.messaging.eventhubs.TestUtils.MESSAGE_POSITION_ID;
-import static com.azure.messaging.eventhubs.TestUtils.getMessage;
+import static com.azure.messaging.eventhubs.TestUtils.OFFSET;
+import static com.azure.messaging.eventhubs.TestUtils.SEQUENCE_NUMBER;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -73,8 +74,8 @@ public class EventHubConsumerClientTest {
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
 
     private final String messageTrackingUUID = UUID.randomUUID().toString();
-    private final TestPublisher<Message> messageProcessor = TestPublisher.createCold();
-    private final MessageSerializer messageSerializer = new EventHubMessageSerializer();
+    private final TestPublisher<AmqpAnnotatedMessage> messageProcessor = TestPublisher.createCold();
+    private final EventHubMessageSerializer messageSerializer = new EventHubMessageSerializer();
 
     private final TestPublisher<AmqpEndpointState> receiveLinkStates = TestPublisher.createCold();
     private final TestPublisher<AmqpEndpointState> connectionStates = TestPublisher.createCold();
@@ -107,7 +108,7 @@ public class EventHubConsumerClientTest {
         when(amqpReceiveLink.getEndpointStates()).thenReturn(receiveLinkStates.flux());
         receiveLinkStates.next(AmqpEndpointState.ACTIVE);
 
-        when(amqpReceiveLink.getCredits()).thenReturn(10);
+        when(amqpReceiveLink.getCredits()).thenReturn(Flux.defer(() -> Flux.just(10)));
         when(amqpReceiveLink.addCredits(anyInt())).thenReturn(Mono.empty());
 
         connectionOptions = new ConnectionOptions(HOSTNAME, tokenCredential,
@@ -266,13 +267,13 @@ public class EventHubConsumerClientTest {
         final int firstReceive = 8;
         final int secondReceive = 4;
 
-        final TestPublisher<Message> messageProcessor2 = TestPublisher.createCold();
+        final TestPublisher<AmqpAnnotatedMessage> messageProcessor2 = TestPublisher.createCold();
         final TestPublisher<AmqpEndpointState> endpointStates2 = TestPublisher.createCold();
         endpointStates2.next(AmqpEndpointState.ACTIVE);
 
         when(amqpReceiveLink2.receive()).thenReturn(messageProcessor2.flux());
         when(amqpReceiveLink2.getEndpointStates()).thenReturn(endpointStates2.flux());
-        when(amqpReceiveLink2.getCredits()).thenReturn(10);
+        when(amqpReceiveLink2.getCredits()).thenReturn(Flux.defer(() -> Flux.just(10)));
         when(amqpReceiveLink2.addCredits(anyInt())).thenReturn(Mono.empty());
 
         // Act
@@ -345,12 +346,13 @@ public class EventHubConsumerClientTest {
         return Integer.valueOf(value);
     }
 
-    private void sendMessages(TestPublisher<Message> publisher, int numberOfEvents, String partitionId) {
+    private void sendMessages(TestPublisher<AmqpAnnotatedMessage> publisher, int numberOfEvents, String partitionId) {
         for (int i = 0; i < numberOfEvents; i++) {
-            Map<String, String> set = new HashMap<>();
-            set.put(MESSAGE_POSITION_ID, Integer.valueOf(i).toString());
-            set.put(PARTITION_ID_HEADER, partitionId);
-            final Message message = getMessage(PAYLOAD_BYTES, messageTrackingUUID, set);
+            final AmqpAnnotatedMessage message = TestUtils.getAnnotatedMessage(PAYLOAD_BYTES, SEQUENCE_NUMBER, OFFSET,
+                Date.from(ENQUEUED_TIME));
+
+            message.getApplicationProperties().put(MESSAGE_POSITION_ID, Integer.valueOf(i).toString());
+            message.getDeliveryAnnotations().put(PARTITION_ID_HEADER, partitionId);
             publisher.next(message);
         }
     }

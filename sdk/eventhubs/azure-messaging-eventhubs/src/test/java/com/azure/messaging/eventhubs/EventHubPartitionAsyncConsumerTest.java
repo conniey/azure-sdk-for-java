@@ -5,10 +5,10 @@ package com.azure.messaging.eventhubs;
 
 import com.azure.core.amqp.AmqpEndpointState;
 import com.azure.core.amqp.AmqpMessageConstant;
+import com.azure.core.amqp.AmqpReceiveLink;
 import com.azure.core.amqp.AmqpRetryOptions;
 import com.azure.core.amqp.AmqpRetryPolicy;
-import com.azure.core.amqp.implementation.AmqpReceiveLink;
-import com.azure.core.amqp.implementation.MessageSerializer;
+import com.azure.core.amqp.models.AmqpAnnotatedMessage;
 import com.azure.core.util.BinaryData;
 import com.azure.core.util.Context;
 import com.azure.core.util.logging.ClientLogger;
@@ -16,7 +16,6 @@ import com.azure.messaging.eventhubs.implementation.AmqpReceiveLinkProcessor;
 import com.azure.messaging.eventhubs.models.EventPosition;
 import com.azure.messaging.eventhubs.models.LastEnqueuedEventProperties;
 import com.azure.messaging.eventhubs.models.PartitionContext;
-import org.apache.qpid.proton.message.Message;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -47,7 +46,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.mock;
@@ -69,11 +67,11 @@ class EventHubPartitionAsyncConsumerTest {
     @Mock
     private AmqpRetryPolicy retryPolicy;
     @Mock
-    private Message message1;
+    private AmqpAnnotatedMessage message1;
     @Mock
-    private Message message2;
+    private AmqpAnnotatedMessage message2;
     @Mock
-    private MessageSerializer messageSerializer;
+    private EventHubMessageSerializer messageSerializer;
     @Mock
     private Disposable parentConnection;
 
@@ -83,8 +81,8 @@ class EventHubPartitionAsyncConsumerTest {
     private final FluxSink<AmqpEndpointState> endpointProcessorSink = endpointProcessor.sink();
 
     private final ClientLogger logger = new ClientLogger(EventHubPartitionAsyncConsumerTest.class);
-    private final DirectProcessor<Message> messageProcessor = DirectProcessor.create();
-    private final FluxSink<Message> messageProcessorSink = messageProcessor.sink();
+    private final DirectProcessor<AmqpAnnotatedMessage> messageProcessor = DirectProcessor.create();
+    private final FluxSink<AmqpAnnotatedMessage> messageProcessorSink = messageProcessor.sink();
 
     private AmqpReceiveLinkProcessor linkProcessor;
     private EventHubPartitionAsyncConsumer consumer;
@@ -139,11 +137,11 @@ class EventHubPartitionAsyncConsumerTest {
         final LastEnqueuedEventProperties last2 = new LastEnqueuedEventProperties(1005L, 154L,
             Instant.ofEpochMilli(8796254), Instant.ofEpochMilli(8795200));
 
-        when(messageSerializer.deserialize(same(message1), eq(EventData.class))).thenReturn(event1);
-        when(messageSerializer.deserialize(same(message1), eq(LastEnqueuedEventProperties.class))).thenReturn(last1);
+        when(messageSerializer.getEventData(same(message1))).thenReturn(event1);
+        when(messageSerializer.getLastEnqueuedEventProperties(same(message1))).thenReturn(last1);
 
-        when(messageSerializer.deserialize(same(message2), eq(EventData.class))).thenReturn(event2);
-        when(messageSerializer.deserialize(same(message2), eq(LastEnqueuedEventProperties.class))).thenReturn(last2);
+        when(messageSerializer.getEventData(same(message2))).thenReturn(event2);
+        when(messageSerializer.getLastEnqueuedEventProperties(same(message2))).thenReturn(last2);
 
         // Act & Assert
         StepVerifier.create(consumer.receive())
@@ -181,7 +179,7 @@ class EventHubPartitionAsyncConsumerTest {
         consumer = new EventHubPartitionAsyncConsumer(linkProcessor, messageSerializer, HOSTNAME, EVENT_HUB_NAME,
             CONSUMER_GROUP, PARTITION_ID, currentPosition, false);
 
-        final Message message3 = mock(Message.class);
+        final AmqpAnnotatedMessage message3 = mock(AmqpAnnotatedMessage.class);
         final String secondOffset = "54";
         final String lastOffset = "65";
         final EventData event1 = new EventData(BinaryData.fromBytes("Foo".getBytes()), getSystemProperties("25", 14),
@@ -191,9 +189,9 @@ class EventHubPartitionAsyncConsumerTest {
         final EventData event3 = new EventData(BinaryData.fromBytes("Baz".getBytes()),
             getSystemProperties(lastOffset, 53), Context.NONE);
 
-        when(messageSerializer.deserialize(same(message1), eq(EventData.class))).thenReturn(event1);
-        when(messageSerializer.deserialize(same(message2), eq(EventData.class))).thenReturn(event2);
-        when(messageSerializer.deserialize(same(message3), eq(EventData.class))).thenReturn(event3);
+        when(messageSerializer.getEventData(same(message1))).thenReturn(event1);
+        when(messageSerializer.getEventData(same(message2))).thenReturn(event2);
+        when(messageSerializer.getEventData(same(message3))).thenReturn(event3);
 
         // Act & Assert
         StepVerifier.create(consumer.receive())
@@ -240,7 +238,7 @@ class EventHubPartitionAsyncConsumerTest {
         consumer = new EventHubPartitionAsyncConsumer(linkProcessor, messageSerializer, HOSTNAME, EVENT_HUB_NAME,
             CONSUMER_GROUP, PARTITION_ID, currentPosition, false);
 
-        final Message message3 = mock(Message.class);
+        final AmqpAnnotatedMessage message3 = mock(AmqpAnnotatedMessage.class);
         final String secondOffset = "54";
         final String lastOffset = "65";
         final EventData event1 = new EventData(BinaryData.fromBytes("Foo".getBytes()), getSystemProperties("25", 14),
@@ -250,9 +248,9 @@ class EventHubPartitionAsyncConsumerTest {
         final EventData event3 = new EventData(BinaryData.fromBytes("Baz".getBytes()), getSystemProperties(lastOffset,
             53), Context.NONE);
 
-        when(messageSerializer.deserialize(same(message1), eq(EventData.class))).thenReturn(event1);
-        when(messageSerializer.deserialize(same(message2), eq(EventData.class))).thenReturn(event2);
-        when(messageSerializer.deserialize(same(message3), eq(EventData.class))).thenReturn(event3);
+        when(messageSerializer.getEventData(same(message1))).thenReturn(event1);
+        when(messageSerializer.getEventData(same(message2))).thenReturn(event2);
+        when(messageSerializer.getEventData(same(message3))).thenReturn(event3);
 
         final CountDownLatch shutdownReceived = new CountDownLatch(1);
         final Disposable subscriptions = consumer.receive()

@@ -35,7 +35,7 @@ public class EventHubMessageSerializerTest {
 
     @Test
     public void deserializeMessageNotNull() {
-        assertThrows(NullPointerException.class, () -> serializer.deserialize(null, EventData.class));
+        assertThrows(NullPointerException.class, () -> serializer.deserialize((Message) null, EventData.class));
     }
 
     @Test
