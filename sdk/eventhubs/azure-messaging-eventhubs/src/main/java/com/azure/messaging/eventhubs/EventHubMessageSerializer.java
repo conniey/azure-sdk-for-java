@@ -5,6 +5,10 @@ package com.azure.messaging.eventhubs;
 
 import com.azure.core.amqp.AmqpMessageConstant;
 import com.azure.core.amqp.implementation.MessageSerializer;
+import com.azure.core.amqp.models.AmqpAnnotatedMessage;
+import com.azure.core.amqp.models.AmqpMessageBody;
+import com.azure.core.amqp.models.AmqpMessageBodyType;
+import com.azure.core.amqp.models.AmqpMessageProperties;
 import com.azure.core.exception.AzureException;
 import com.azure.core.util.BinaryData;
 import com.azure.core.util.Context;
@@ -140,6 +144,63 @@ class EventHubMessageSerializer implements MessageSerializer {
     @Override
     public <T> List<T> deserializeList(Message message, Class<T> clazz) {
         return Collections.singletonList(deserialize(message, clazz));
+    }
+
+    public EventData getEventData(AmqpAnnotatedMessage message) {
+        Objects.requireNonNull(message, "'message' cannot be null.");
+        final Map<String, Object> receiveProperties = new HashMap<>(message.getMessageAnnotations());
+
+        final AmqpMessageProperties properties = message.getProperties();
+        if (properties != null) {
+            addMapEntry(receiveProperties, AmqpMessageConstant.MESSAGE_ID, properties.getMessageId());
+            addMapEntry(receiveProperties, AmqpMessageConstant.USER_ID, properties.getUserId());
+            addMapEntry(receiveProperties, AmqpMessageConstant.TO, properties.getTo());
+            addMapEntry(receiveProperties, AmqpMessageConstant.SUBJECT, properties.getSubject());
+            addMapEntry(receiveProperties, AmqpMessageConstant.REPLY_TO, properties.getReplyTo());
+            addMapEntry(receiveProperties, AmqpMessageConstant.CORRELATION_ID, properties.getCorrelationId());
+            addMapEntry(receiveProperties, AmqpMessageConstant.CONTENT_TYPE, properties.getContentType());
+            addMapEntry(receiveProperties, AmqpMessageConstant.CONTENT_ENCODING, properties.getContentEncoding());
+            addMapEntry(receiveProperties, AmqpMessageConstant.ABSOLUTE_EXPIRY_TIME,
+                properties.getAbsoluteExpiryTime());
+            addMapEntry(receiveProperties, AmqpMessageConstant.CREATION_TIME, properties.getCreationTime());
+            addMapEntry(receiveProperties, AmqpMessageConstant.GROUP_ID, properties.getGroupId());
+            addMapEntry(receiveProperties, AmqpMessageConstant.GROUP_SEQUENCE, properties.getGroupSequence());
+            addMapEntry(receiveProperties, AmqpMessageConstant.REPLY_TO_GROUP_ID, properties.getReplyToGroupId());
+        }
+
+        final AmqpMessageBody messageBody = message.getBody();
+        byte[] body;
+        if (messageBody.getBodyType() == AmqpMessageBodyType.DATA) {
+            body = message.getBody().getFirstData();
+        } else {
+            logger.warning(String.format(Messages.MESSAGE_NOT_OF_TYPE, messageBody.getBodyType()));
+            body = new byte[0];
+        }
+
+        final EventData.SystemProperties systemProperties = new EventData.SystemProperties(receiveProperties);
+        final EventData eventData = new EventData(BinaryData.fromBytes(body), systemProperties, Context.NONE);
+
+        message.getApplicationProperties().forEach((key, value) -> eventData.getProperties().put(key, value));
+        return eventData;
+    }
+
+    public LastEnqueuedEventProperties getLastEnqueuedEventProperties(AmqpAnnotatedMessage message) {
+        if (message.getDeliveryAnnotations().isEmpty()) {
+            return null;
+        }
+
+        final Map<String, Object> deliveryAnnotations = message.getDeliveryAnnotations();
+        final Long lastSequenceNumber = getValue(deliveryAnnotations, MANAGEMENT_RESULT_LAST_ENQUEUED_SEQUENCE_NUMBER,
+            Long.class);
+        final String lastEnqueuedOffset = getValue(deliveryAnnotations, MANAGEMENT_RESULT_LAST_ENQUEUED_OFFSET,
+            String.class);
+        final Instant lastEnqueuedTime = getValue(deliveryAnnotations, MANAGEMENT_RESULT_LAST_ENQUEUED_TIME_UTC,
+            Date.class).toInstant();
+        final Instant retrievalTime = getValue(deliveryAnnotations, MANAGEMENT_RESULT_RUNTIME_INFO_RETRIEVAL_TIME_UTC,
+            Date.class).toInstant();
+
+        return new LastEnqueuedEventProperties(lastSequenceNumber, Long.valueOf(lastEnqueuedOffset), lastEnqueuedTime,
+            retrievalTime);
     }
 
     @SuppressWarnings("unchecked")
