@@ -104,7 +104,7 @@ class ReactorSender implements AmqpSendLink, AsyncCloseable, AutoCloseable {
 
     private volatile Exception lastKnownLinkError;
     private volatile Instant lastKnownErrorReportedAt;
-    private volatile int linkSize;
+    private volatile long linkSize;
 
     ReactorSender(AmqpConnection amqpConnection, String entityPath, Sender sender, SendLinkHandler handler,
         ReactorProvider reactorProvider, TokenManager tokenManager, MessageSerializer messageSerializer,
@@ -212,11 +212,11 @@ class ReactorSender implements AmqpSendLink, AsyncCloseable, AutoCloseable {
             ? MessageUtils.toProtonJDeliveryState(deliveryOutcome)
             : null;
 
-        return getLinkSize()
+        return getMaxMessageSizeInBytes()
             .flatMap(maxMessageSize -> {
                 final int payloadSize = messageSerializer.getSize(message);
                 final int allocationSize =
-                    Math.min(payloadSize + MAX_AMQP_HEADER_SIZE_BYTES, maxMessageSize);
+                    Math.min(payloadSize + MAX_AMQP_HEADER_SIZE_BYTES, maxMessageSize.intValue());
                 final byte[] bytes = new byte[allocationSize];
 
                 int encodedSize;
@@ -255,7 +255,7 @@ class ReactorSender implements AmqpSendLink, AsyncCloseable, AutoCloseable {
             return send(messageList.get(0), deliveryOutcome);
         }
 
-        return getLinkSize()
+        return getMaxMessageSizeInBytes()
             .flatMap(maxMessageSize -> {
                 final Message firstMessage = MessageUtils.toProtonJMessage(messageList.get(0));
 
@@ -264,7 +264,7 @@ class ReactorSender implements AmqpSendLink, AsyncCloseable, AutoCloseable {
                 final Message batchMessage = Proton.message();
                 batchMessage.setMessageAnnotations(firstMessage.getMessageAnnotations());
 
-                final int maxMessageSizeTemp = maxMessageSize;
+                final int maxMessageSizeTemp = maxMessageSize.intValue();
 
                 final byte[] bytes = new byte[maxMessageSizeTemp];
                 int encodedSize = batchMessage.encode(bytes, 0, maxMessageSizeTemp);
@@ -342,7 +342,7 @@ class ReactorSender implements AmqpSendLink, AsyncCloseable, AutoCloseable {
     }
 
     @Override
-    public Mono<Integer> getLinkSize() {
+    public Mono<Long> getMaxMessageSizeInBytes() {
         if (linkSize > 0) {
             return Mono.just(this.linkSize);
         }
@@ -357,7 +357,7 @@ class ReactorSender implements AmqpSendLink, AsyncCloseable, AutoCloseable {
                 .then(Mono.fromCallable(() -> {
                     final UnsignedLong remoteMaxMessageSize = sender.getRemoteMaxMessageSize();
                     if (remoteMaxMessageSize != null) {
-                        linkSize = remoteMaxMessageSize.intValue();
+                        linkSize = remoteMaxMessageSize.longValue();
                     } else {
                         logger.warning("connectionId[{}], linkName[{}]: Could not get the getRemoteMaxMessageSize."
                                 + " Returning current link size: {}", handler.getConnectionId(), handler.getLinkName(),
