@@ -54,6 +54,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -208,7 +209,8 @@ public class ReactorSenderTest {
         // Assert
         verify(sender, times(1)).getRemoteMaxMessageSize();
         verify(spyReactorSender).send(any(byte[].class), anyInt(), eq(DeliveryImpl.DEFAULT_MESSAGE_FORMAT),
-            eq(transactionalState));
+            argThat(state -> state instanceof TransactionalState
+                && buffer.equals(((TransactionalState) state).getTxnId().asByteBuffer())));
     }
 
     /**
@@ -238,7 +240,8 @@ public class ReactorSenderTest {
         // Assert
         verify(sender).getRemoteMaxMessageSize();
         verify(spyReactorSender, times(2)).send(any(byte[].class), anyInt(),
-            eq(DeliveryImpl.DEFAULT_MESSAGE_FORMAT), eq(transactionalState));
+            eq(DeliveryImpl.DEFAULT_MESSAGE_FORMAT), argThat(state -> state instanceof TransactionalState
+                && buffer.equals(((TransactionalState) state).getTxnId().asByteBuffer())));
     }
 
     /**
@@ -248,7 +251,7 @@ public class ReactorSenderTest {
     public void testSendWithTransactionDeliverySet() throws IOException {
         // Arrange
         // This is specific to this message and needs to align with this message.
-        when(sender.send(any(byte[].class), anyInt(), anyInt())).thenReturn(26);
+        when(sender.send(any(byte[].class), anyInt(), anyInt())).thenReturn(52);
 
         final ReactorSender reactorSender = new ReactorSender(amqpConnection, ENTITY_PATH, sender, handler,
             reactorProvider, tokenManager, messageSerializer, options);
@@ -276,7 +279,9 @@ public class ReactorSenderTest {
 
         // Assert
         DeliveryState deliveryState = deliveryStateArgumentCaptor.getValue();
-        Assertions.assertSame(transactionalState, deliveryState);
+        assertTrue(deliveryState instanceof TransactionalState);
+        assertEquals(buffer, ((TransactionalState) deliveryState).getTxnId().asByteBuffer());
+
         verify(sender).getRemoteMaxMessageSize();
         verify(sender).advance();
     }
@@ -618,15 +623,14 @@ public class ReactorSenderTest {
         final AmqpException error = new AmqpException(false, AmqpErrorCondition.ILLEGAL_STATE, "not-allowed",
             new AmqpErrorContext("foo-bar"));
 
-        final AmqpAnnotatedMessage message = mock(AmqpAnnotatedMessage.class);
+        final AmqpAnnotatedMessage message = new AmqpAnnotatedMessage(
+            AmqpMessageBody.fromData("bar".getBytes(StandardCharsets.UTF_8)));
 
         doAnswer(invocationOnMock -> {
             final Runnable work = invocationOnMock.getArgument(0);
             work.run();
             return null;
         }).when(reactorDispatcher).invoke(any(Runnable.class));
-
-        // Act
 
         // Assert and Act
         StepVerifier.create(reactorSender.send(message))
