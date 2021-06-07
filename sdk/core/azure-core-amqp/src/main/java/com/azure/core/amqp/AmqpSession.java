@@ -71,6 +71,22 @@ public interface AmqpSession extends Disposable, AsyncCloseable {
     Mono<AmqpLink> createConsumer(String linkName, String entityPath, Duration timeout, AmqpRetryPolicy retryPolicy);
 
     /**
+     * Creates a new AMQP send link that consumes messages from the AMQP message broker.
+     *
+     * @param linkName Name of the link.
+     * @param entityPath The entity path this link connects to, so that it may read events from the message broker.
+     * @param timeout Timeout required for creating and opening an AMQP link.
+     * @param retryPolicy The retry policy to use when consuming messages.
+     * @param createLinkOptions Options used for creating link.
+     *
+     * @return A newly created AMQP receive link.
+     */
+    default Mono<AmqpReceiveLink> createConsumer(String linkName, String entityPath, Duration timeout,
+        AmqpRetryPolicy retryPolicy, CreateLinkOptions createLinkOptions) {
+        return Mono.empty();
+    }
+
+    /**
      * Removes an {@link AmqpLink} with the given {@code linkName}.
      *
      * @param linkName Name of the link to remove.
