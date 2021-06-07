@@ -3,15 +3,20 @@
 
 package com.azure.messaging.eventhubs;
 
+import com.azure.core.amqp.AmqpMessageConstant;
 import com.azure.core.amqp.AmqpRetryOptions;
 import com.azure.core.amqp.AmqpRetryPolicy;
+import com.azure.core.amqp.AmqpSendLink;
 import com.azure.core.amqp.exception.AmqpErrorCondition;
 import com.azure.core.amqp.exception.AmqpException;
-import com.azure.core.amqp.implementation.AmqpConstants;
-import com.azure.core.amqp.implementation.AmqpSendLink;
+import com.azure.core.amqp.exception.LinkErrorContext;
 import com.azure.core.amqp.implementation.ErrorContextProvider;
 import com.azure.core.amqp.implementation.MessageSerializer;
 import com.azure.core.amqp.implementation.TracerProvider;
+import com.azure.core.amqp.models.AmqpAddress;
+import com.azure.core.amqp.models.AmqpAnnotatedMessage;
+import com.azure.core.amqp.models.AmqpMessageBody;
+import com.azure.core.amqp.models.AmqpMessageId;
 import com.azure.core.annotation.ReturnType;
 import com.azure.core.annotation.ServiceClient;
 import com.azure.core.annotation.ServiceMethod;
@@ -24,16 +29,17 @@ import com.azure.messaging.eventhubs.implementation.EventHubConnectionProcessor;
 import com.azure.messaging.eventhubs.implementation.EventHubManagementNode;
 import com.azure.messaging.eventhubs.models.CreateBatchOptions;
 import com.azure.messaging.eventhubs.models.SendOptions;
-import org.apache.qpid.proton.amqp.messaging.MessageAnnotations;
-import org.apache.qpid.proton.message.Message;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
 
 import java.io.Closeable;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -46,6 +52,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collector;
 
+import static com.azure.core.amqp.AmqpMessageConstant.PARTITION_KEY_ANNOTATION_NAME;
 import static com.azure.core.amqp.implementation.RetryUtil.getRetryPolicy;
 import static com.azure.core.amqp.implementation.RetryUtil.withRetry;
 import static com.azure.core.util.FluxUtil.monoError;
@@ -231,9 +238,9 @@ public class EventHubProducerAsyncClient implements Closeable {
         }
 
         return getSendLink(partitionId)
-            .flatMap(link -> link.getLinkSize()
+            .flatMap(link -> link.getMaxMessageSizeInBytes()
                 .flatMap(size -> {
-                    final int maximumLinkSize = size > 0
+                    final long maximumLinkSize = size > 0
                         ? size
                         : MAX_MESSAGE_LENGTH_BYTES;
 
@@ -246,9 +253,10 @@ public class EventHubProducerAsyncClient implements Closeable {
 
                     final int batchSize = batchMaxSize > 0
                         ? batchMaxSize
-                        : maximumLinkSize;
+                        : (int) maximumLinkSize;
 
-                    return Mono.just(new EventDataBatch(batchSize, partitionId, partitionKey, link::getErrorContext,
+                    return Mono.just(new EventDataBatch(batchSize, partitionId, partitionKey,
+                        () -> new LinkErrorContext(link.getHostname(), link.getEntityPath(), link.getLinkName(), 0),
                         tracerProvider, link.getEntityPath(), link.getHostname()));
                 }));
     }
@@ -422,7 +430,7 @@ public class EventHubProducerAsyncClient implements Closeable {
             : null;
 
         Context sharedContext = null;
-        final List<Message> messages = new ArrayList<>();
+        final List<AmqpAnnotatedMessage> messages = new ArrayList<>();
 
         for (int i = 0; i < batch.getEvents().size(); i++) {
             final EventData event = batch.getEvents().get(i);
@@ -434,14 +442,10 @@ public class EventHubProducerAsyncClient implements Closeable {
                 }
                 tracerProvider.addSpanLinks(sharedContext.addData(SPAN_CONTEXT_KEY, event.getContext()));
             }
-            final Message message = messageSerializer.serialize(event);
+            final AmqpAnnotatedMessage message = serialize(event);
 
             if (!CoreUtils.isNullOrEmpty(partitionKey)) {
-                final MessageAnnotations messageAnnotations = message.getMessageAnnotations() == null
-                    ? new MessageAnnotations(new HashMap<>())
-                    : message.getMessageAnnotations();
-                messageAnnotations.getValue().put(AmqpConstants.PARTITION_KEY, partitionKey);
-                message.setMessageAnnotations(messageAnnotations);
+                message.getMessageAnnotations().put(PARTITION_KEY_ANNOTATION_NAME.getValue(), partitionKey);
             }
             messages.add(message);
         }
@@ -458,9 +462,8 @@ public class EventHubProducerAsyncClient implements Closeable {
         }
 
         final Mono<Void> sendMessage = getSendLink(batch.getPartitionId())
-            .flatMap(link -> messages.size() == 1
-                ? link.send(messages.get(0))
-                : link.send(messages));
+            .flatMap(link -> link.send(messages))
+            .then();
 
         return withRetry(sendMessage, retryOptions,
             String.format("partitionId[%s]: Sending messages timed out.", batch.getPartitionId()))
@@ -485,14 +488,15 @@ public class EventHubProducerAsyncClient implements Closeable {
         }
 
         return getSendLink(options.getPartitionId())
-            .flatMap(link -> link.getLinkSize()
+            .flatMap(link -> link.getMaxMessageSizeInBytes()
                 .flatMap(size -> {
-                    final int batchSize = size > 0 ? size : MAX_MESSAGE_LENGTH_BYTES;
+                    final int batchSize = size > 0 ? size.intValue() : MAX_MESSAGE_LENGTH_BYTES;
                     final CreateBatchOptions batchOptions = new CreateBatchOptions()
                         .setPartitionKey(options.getPartitionKey())
                         .setPartitionId(options.getPartitionId())
                         .setMaximumSizeInBytes(batchSize);
-                    return events.collect(new EventDataCollector(batchOptions, 1, link::getErrorContext,
+                    return events.collect(new EventDataCollector(batchOptions, 1,
+                        () -> new LinkErrorContext(link.getHostname(), link.getEntityPath(), link.getLinkName(), 0),
                         tracerProvider, link.getEntityPath(), link.getHostname()));
                 })
                 .flatMap(list -> sendInternal(Flux.fromIterable(list))));
@@ -628,5 +632,100 @@ public class EventHubProducerAsyncClient implements Closeable {
         public Set<Characteristics> characteristics() {
             return Collections.emptySet();
         }
+    }
+
+    private static AmqpAnnotatedMessage serialize(EventData eventData) {
+        final AmqpAnnotatedMessage message = new AmqpAnnotatedMessage(AmqpMessageBody.fromData(eventData.getBody()));
+        if (eventData.getProperties() != null && !eventData.getProperties().isEmpty()) {
+            message.getApplicationProperties().putAll(eventData.getProperties());
+        }
+
+        if (eventData.getSystemProperties() == null || eventData.getSystemProperties().isEmpty()) {
+            return message;
+        }
+
+        eventData.getSystemProperties().forEach((key, value) -> {
+            if (EventData.RESERVED_SYSTEM_PROPERTIES.contains(key)) {
+                return;
+            }
+
+            final AmqpMessageConstant constant = AmqpMessageConstant.fromString(key);
+
+            if (constant == null) {
+                message.getMessageAnnotations().put(key, value);
+                return;
+            }
+
+            switch (constant) {
+                case MESSAGE_ID:
+                    if (value instanceof String) {
+                        message.getProperties().setMessageId(new AmqpMessageId((String) value));
+                    }
+                    break;
+                case USER_ID:
+                    message.getProperties().setUserId((byte[]) value);
+                    break;
+                case TO:
+                    if (value instanceof String) {
+                        message.getProperties().setTo(new AmqpAddress((String) value));
+                    }
+                    break;
+                case SUBJECT:
+                    message.getProperties().setSubject((String) value);
+                    break;
+                case REPLY_TO:
+                    if (value instanceof String) {
+                        message.getProperties().setReplyTo(new AmqpAddress((String) value));
+                    }
+                    break;
+                case CORRELATION_ID:
+                    if (value instanceof String) {
+                        message.getProperties().setCorrelationId(new AmqpMessageId((String) value));
+                    }
+                    break;
+                case CONTENT_TYPE:
+                    message.getProperties().setContentType((String) value);
+                    break;
+                case CONTENT_ENCODING:
+                    message.getProperties().setContentEncoding((String) value);
+                    break;
+                case ABSOLUTE_EXPIRY_TIME:
+                    if (value instanceof OffsetDateTime) {
+                        message.getProperties().setAbsoluteExpiryTime((OffsetDateTime) value);
+                    } else if (value instanceof Long) {
+                        final OffsetDateTime dateTime = Instant.ofEpochMilli((Long) value).atOffset(ZoneOffset.UTC);
+                        message.getProperties().setAbsoluteExpiryTime(dateTime);
+                    } else if (value instanceof Date) {
+                        message.getProperties().setAbsoluteExpiryTime(
+                            ((Date) value).toInstant().atOffset(ZoneOffset.UTC));
+                    }
+                    break;
+                case CREATION_TIME:
+                    if (value instanceof OffsetDateTime) {
+                        message.getProperties().setCreationTime((OffsetDateTime) value);
+                    } else if (value instanceof Long) {
+                        final OffsetDateTime dateTime = Instant.ofEpochMilli((Long) value).atOffset(ZoneOffset.UTC);
+                        message.getProperties().setCreationTime(dateTime);
+                    } else if (value instanceof Date) {
+                        message.getProperties().setCreationTime(
+                            ((Date) value).toInstant().atOffset(ZoneOffset.UTC));
+                    }
+                    break;
+                case GROUP_ID:
+                    message.getProperties().setGroupId((String) value);
+                    break;
+                case GROUP_SEQUENCE:
+                    message.getProperties().setGroupSequence((long) value);
+                    break;
+                case REPLY_TO_GROUP_ID:
+                    message.getProperties().setReplyToGroupId((String) value);
+                    break;
+                default:
+                    throw new IllegalArgumentException(
+                        String.format("Property is not a recognized reserved property name: %s", key));
+            }
+        });
+
+        return message;
     }
 }
