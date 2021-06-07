@@ -52,11 +52,4 @@ public interface AmqpSendLink extends AmqpLink {
      * message.
      */
     Mono<DeliveryOutcome> send(Iterable<AmqpAnnotatedMessage> messageBatch, DeliveryOutcome deliveryOutcome);
-
-    /**
-     * Gets the size of the send link. {@link AmqpAnnotatedMessage messages} sent on the link cannot exceed the size.
-     *
-     * @return A Mono that completes and returns the size of the send link.
-     */
-    Mono<Integer> getLinkSize();
 }
