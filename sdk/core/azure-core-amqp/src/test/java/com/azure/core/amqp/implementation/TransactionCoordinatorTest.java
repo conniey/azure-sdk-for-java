@@ -4,10 +4,11 @@
 package com.azure.core.amqp.implementation;
 
 import com.azure.core.amqp.AmqpTransaction;
-import org.apache.qpid.proton.amqp.Binary;
-import org.apache.qpid.proton.amqp.messaging.Accepted;
-import org.apache.qpid.proton.amqp.messaging.Rejected;
-import org.apache.qpid.proton.amqp.transaction.Declared;
+import com.azure.core.amqp.exception.AmqpErrorCondition;
+import com.azure.core.amqp.models.DeliveryOutcome;
+import com.azure.core.amqp.models.DeliveryState;
+import com.azure.core.amqp.models.RejectedDeliveryOutcome;
+import com.azure.core.amqp.models.TransactionalDeliveryOutcome;
 import org.apache.qpid.proton.engine.impl.DeliveryImpl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -30,6 +31,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link TransactionCoordinator}
@@ -61,7 +63,7 @@ public class TransactionCoordinatorTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testCompleteTransactionRejected(boolean isCommit) {
-        final Rejected outcome = new Rejected();
+        final RejectedDeliveryOutcome outcome = new RejectedDeliveryOutcome(AmqpErrorCondition.INTERNAL_ERROR);
 
         final AmqpTransaction transaction = new AmqpTransaction(ByteBuffer.wrap("1".getBytes()));
 
@@ -78,7 +80,7 @@ public class TransactionCoordinatorTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testCompleteTransaction(boolean isCommit) {
-        final Accepted outcome = Accepted.getInstance();
+        final DeliveryOutcome outcome = new DeliveryOutcome(DeliveryState.ACCEPTED);
 
         final AmqpTransaction transaction = new AmqpTransaction(ByteBuffer.wrap("1".getBytes()));
 
@@ -89,13 +91,12 @@ public class TransactionCoordinatorTest {
         StepVerifier.create(transactionCoordinator.discharge(transaction, isCommit))
             .verifyComplete();
 
-        verify(sendLink, times(1)).send(any(byte[].class), anyInt(), eq(DeliveryImpl.DEFAULT_MESSAGE_FORMAT), isNull());
+        verify(sendLink).send(any(byte[].class), anyInt(), eq(DeliveryImpl.DEFAULT_MESSAGE_FORMAT), isNull());
     }
 
     @Test
     public void testCreateTransactionRejected() {
-        Rejected outcome = new Rejected();
-
+        final RejectedDeliveryOutcome outcome = new RejectedDeliveryOutcome(AmqpErrorCondition.ARGUMENT_ERROR);
         final TransactionCoordinator transactionCoordinator = new TransactionCoordinator(sendLink, messageSerializer);
 
         doReturn(Mono.just(outcome)).when(sendLink).send(any(byte[].class), anyInt(), eq(DeliveryImpl.DEFAULT_MESSAGE_FORMAT), isNull());
@@ -103,19 +104,21 @@ public class TransactionCoordinatorTest {
         StepVerifier.create(transactionCoordinator.declare())
             .verifyError(IllegalArgumentException.class);
 
-        verify(sendLink, times(1)).send(any(byte[].class), anyInt(), eq(DeliveryImpl.DEFAULT_MESSAGE_FORMAT), isNull());
+        verify(sendLink).send(any(byte[].class), anyInt(), eq(DeliveryImpl.DEFAULT_MESSAGE_FORMAT), isNull());
     }
 
     @Test
     public void testCreateTransaction() {
+        // Arrange
         final byte[] transactionId = "1".getBytes();
-        Declared transactionState = new Declared();
-        transactionState.setTxnId(Binary.create(ByteBuffer.wrap(transactionId)));
+        final AmqpTransaction transaction = new AmqpTransaction(ByteBuffer.wrap(transactionId));
+        final TransactionalDeliveryOutcome transactionalDeliveryOutcome = new TransactionalDeliveryOutcome(transaction);
+        final TransactionCoordinator transactionCoordinator = new TransactionCoordinator(sendLink, messageSerializer);
 
-        TransactionCoordinator transactionCoordinator = new TransactionCoordinator(sendLink, messageSerializer);
+        when(sendLink.send(any(byte[].class), anyInt(), eq(DeliveryImpl.DEFAULT_MESSAGE_FORMAT), isNull()))
+            .thenReturn(Mono.just(transactionalDeliveryOutcome));
 
-        doReturn(Mono.just(transactionState)).when(sendLink).send(any(byte[].class), anyInt(), eq(DeliveryImpl.DEFAULT_MESSAGE_FORMAT), isNull());
-
+        // Act & Assert
         StepVerifier.create(transactionCoordinator.declare())
             .assertNext(actual -> {
                 Assertions.assertNotNull(actual);
