@@ -4,10 +4,14 @@
 package com.azure.core.amqp;
 
 import com.azure.core.amqp.exception.AmqpException;
+import com.azure.core.amqp.models.ReceiverSettleMode;
+import com.azure.core.amqp.models.SenderSettleMode;
 import com.azure.core.util.AsyncCloseable;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+
+import java.util.Collections;
 
 /**
  * Represents a unidirectional AMQP link.
@@ -50,5 +54,50 @@ public interface AmqpLink extends Disposable, AsyncCloseable {
      */
     default Mono<Void> closeAsync() {
         return Mono.fromRunnable(() -> dispose());
+    }
+
+    /**
+     * Gets the maximum message size supported by the link.
+     *
+     * @return the maximum message size supported by the link.
+     */
+    default Mono<Long> getMaxMessageSizeInBytes() {
+        return Mono.empty();
+    }
+
+    /**
+     * Gets the actual capabilities offered by the link.
+     *
+     * @return Capabilities offered by the link.
+     */
+    default Flux<String> getOfferedCapabilities() {
+        return Flux.empty();
+    }
+
+    /**
+     * Gets the desired capabilities of the link.
+     *
+     * @return The desired capabilities of the link.
+     */
+    default Iterable<String> getDesiredCapabilities() {
+        return Collections.emptyList();
+    }
+
+    /**
+     * Gets the sender settle mode.
+     *
+     * @return The sender settle mode.
+     */
+    default SenderSettleMode getSenderSettleMode() {
+        return SenderSettleMode.UNSETTLED;
+    }
+
+    /**
+     * Gets the receiver settle mode.
+     *
+     * @return The receiver settle mode.
+     */
+    default ReceiverSettleMode getReceiverSettleMode() {
+        return ReceiverSettleMode.FIRST;
     }
 }
