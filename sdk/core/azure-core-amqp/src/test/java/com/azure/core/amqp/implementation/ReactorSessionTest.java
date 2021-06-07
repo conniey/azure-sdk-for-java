@@ -232,6 +232,7 @@ public class ReactorSessionTest {
         final ErrorCondition errorCondition = new ErrorCondition(
             Symbol.valueOf(AmqpErrorCondition.SERVER_BUSY_ERROR.getErrorCondition()), "test-busy");
         when(sender.getRemoteCondition()).thenReturn(errorCondition);
+        when(sender.getName()).thenReturn(linkName);
 
         when(session.sender(linkName)).thenReturn(sender);
         when(session.getRemoteState()).thenReturn(EndpointState.ACTIVE);
