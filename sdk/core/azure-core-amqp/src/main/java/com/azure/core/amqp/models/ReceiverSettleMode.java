@@ -36,4 +36,22 @@ public enum ReceiverSettleMode {
     public int getValue() {
         return value;
     }
+
+    /**
+     * Gets the corresponding ReceiverSettleMode for the given value.
+     *
+     * @param value Value to convert.
+     * @return The corresponding {@link ReceiverSettleMode}.
+     * @throws IllegalArgumentException if the value is not one of the supported values.
+     */
+    public static ReceiverSettleMode valueOf(int value) {
+        switch (value) {
+            case 0:
+                return ReceiverSettleMode.FIRST;
+            case 1:
+                return ReceiverSettleMode.SECOND;
+            default:
+                throw new IllegalArgumentException("The value can be only 0 (for FIRST), 1 (for SECOND).");
+        }
+    }
 }
