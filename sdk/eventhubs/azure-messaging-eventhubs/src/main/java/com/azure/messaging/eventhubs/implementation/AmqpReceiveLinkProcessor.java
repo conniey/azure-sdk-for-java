@@ -4,14 +4,14 @@
 package com.azure.messaging.eventhubs.implementation;
 
 import com.azure.core.amqp.AmqpEndpointState;
+import com.azure.core.amqp.AmqpReceiveLink;
 import com.azure.core.amqp.AmqpRetryPolicy;
 import com.azure.core.amqp.exception.AmqpErrorCondition;
 import com.azure.core.amqp.exception.AmqpException;
 import com.azure.core.amqp.exception.LinkErrorContext;
-import com.azure.core.amqp.implementation.AmqpReceiveLink;
+import com.azure.core.amqp.models.AmqpAnnotatedMessage;
 import com.azure.core.util.AsyncCloseable;
 import com.azure.core.util.logging.ClientLogger;
-import org.apache.qpid.proton.message.Message;
 import org.reactivestreams.Subscription;
 import reactor.core.CoreSubscriber;
 import reactor.core.Disposable;
@@ -31,21 +31,20 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
-import java.util.function.Supplier;
 
 /**
  * Processes AMQP receive links into a stream of AMQP messages.
  */
-public class AmqpReceiveLinkProcessor extends FluxProcessor<AmqpReceiveLink, Message> implements Subscription {
+public class AmqpReceiveLinkProcessor extends FluxProcessor<AmqpReceiveLink, AmqpAnnotatedMessage> implements Subscription {
     private final ClientLogger logger = new ClientLogger(AmqpReceiveLinkProcessor.class);
     private final Object lock = new Object();
     private final AtomicBoolean isTerminated = new AtomicBoolean();
     private final AtomicInteger retryAttempts = new AtomicInteger();
-    private final Deque<Message> messageQueue = new ConcurrentLinkedDeque<>();
+    private final Deque<AmqpAnnotatedMessage> messageQueue = new ConcurrentLinkedDeque<>();
     private final AtomicBoolean linkHasNoCredits = new AtomicBoolean();
     private final Object creditsAdded = new Object();
 
-    private final AtomicReference<CoreSubscriber<? super Message>> downstream = new AtomicReference<>();
+    private final AtomicReference<CoreSubscriber<? super AmqpAnnotatedMessage>> downstream = new AtomicReference<>();
     private final AtomicInteger wip = new AtomicInteger();
 
     private final int prefetch;
@@ -165,28 +164,29 @@ public class AmqpReceiveLinkProcessor extends FluxProcessor<AmqpReceiveLink, Mes
             currentLink = next;
             currentLinkName = next.getLinkName();
 
-            // Empty credit listener is invoked when there are no credits left on the underlying link.
-            next.setEmptyCreditListener(() -> {
-                final int credits;
-                synchronized (creditsAdded) {
-                    credits = getCreditsToAdd();
-
-                    // This means that considering the downstream request and current size of the message queue, we
-                    // have enough messages to satisfy them.
-                    // Thus, there are no credits on the link AND we are not going to add anymore.
-                    // We'll wait until the next time downstream calls request(long) to get more events.
-                    if (credits < 1) {
-                        linkHasNoCredits.compareAndSet(false, true);
-                    } else {
-                        logger.info("linkName[{}] entityPath[{}] credits[{}] Link is empty. Adding more credits.",
-                            linkName, entityPath, credits);
-                    }
-                }
-
-                return credits;
-            });
-
             currentLinkSubscriptions = Disposables.composite(
+                next.getCredits()
+                    .filter(credits -> credits < 1)
+                    .flatMap(lessThanOneCredit -> {
+                        final int credits;
+                        synchronized (creditsAdded) {
+                            credits = getCreditsToAdd();
+
+                            // This means that considering the downstream request and current size of the message queue,
+                            // we have enough messages to satisfy them.
+                            // Thus, there are no credits on the link AND we are not going to add anymore.
+                            // We'll wait until the next time downstream calls request(long) to get more events.
+                            if (credits < 1) {
+                                linkHasNoCredits.compareAndSet(false, true);
+                                return Mono.empty();
+                            } else {
+                                logger.info("linkName[{}] entityPath[{}] credits[{}] Link is empty. Adding more "
+                                        + "credits.", linkName, entityPath, credits);
+                                return currentLink.addCredits(credits);
+                            }
+                        }
+                    }).subscribe(),
+
                 // For a new link, add the prefetch as credits.
                 next.getEndpointStates().filter(e -> e == AmqpEndpointState.ACTIVE).next()
                     .flatMap(state -> {
@@ -277,7 +277,7 @@ public class AmqpReceiveLinkProcessor extends FluxProcessor<AmqpReceiveLink, Mes
      * @throws IllegalStateException if there is already a downstream subscriber.
      */
     @Override
-    public void subscribe(CoreSubscriber<? super Message> actual) {
+    public void subscribe(CoreSubscriber<? super AmqpAnnotatedMessage> actual) {
         Objects.requireNonNull(actual, "'actual' cannot be null.");
 
         final boolean terminateSubscriber = isTerminated()
@@ -336,7 +336,7 @@ public class AmqpReceiveLinkProcessor extends FluxProcessor<AmqpReceiveLink, Mes
         lastError = throwable;
         isTerminated.set(true);
 
-        final CoreSubscriber<? super Message> subscriber = downstream.get();
+        final CoreSubscriber<? super AmqpAnnotatedMessage> subscriber = downstream.get();
         if (subscriber != null) {
             subscriber.onError(throwable);
         }
@@ -453,7 +453,7 @@ public class AmqpReceiveLinkProcessor extends FluxProcessor<AmqpReceiveLink, Mes
     }
 
     private void drainQueue() {
-        final CoreSubscriber<? super Message> subscriber = downstream.get();
+        final CoreSubscriber<? super AmqpAnnotatedMessage> subscriber = downstream.get();
         if (subscriber == null || checkAndSetTerminated()) {
             return;
         }
@@ -471,7 +471,7 @@ public class AmqpReceiveLinkProcessor extends FluxProcessor<AmqpReceiveLink, Mes
                     break;
                 }
 
-                Message message = messageQueue.poll();
+                AmqpAnnotatedMessage message = messageQueue.poll();
                 if (message == null) {
                     break;
                 }
@@ -511,7 +511,7 @@ public class AmqpReceiveLinkProcessor extends FluxProcessor<AmqpReceiveLink, Mes
             return false;
         }
 
-        final CoreSubscriber<? super Message> subscriber = downstream.get();
+        final CoreSubscriber<? super AmqpAnnotatedMessage> subscriber = downstream.get();
         final Throwable error = lastError;
         if (error != null) {
             subscriber.onError(error);
@@ -532,8 +532,8 @@ public class AmqpReceiveLinkProcessor extends FluxProcessor<AmqpReceiveLink, Mes
      * Calculates if there are enough credits to satisfy the downstream subscriber. If there is not AND the link has no
      * more credits, we will add them onto the link.
      *
-     * In the case that the link has some credits, but _not_ enough to satisfy the request, when the link is empty, it
-     * will call {@link AmqpReceiveLink#setEmptyCreditListener(Supplier)} to get how much is remaining.
+     * In the case that the link has some credits, but _not_ enough to satisfy the request, we check remote credits
+     * every time a message is "decoded" in ReactorReceiver, so it'll be emitted.
      *
      * @param message Additional message for context.
      */
@@ -577,7 +577,7 @@ public class AmqpReceiveLinkProcessor extends FluxProcessor<AmqpReceiveLink, Mes
      * @return The number of credits to add.
      */
     private int getCreditsToAdd() {
-        final CoreSubscriber<? super Message> subscriber = downstream.get();
+        final CoreSubscriber<? super AmqpAnnotatedMessage> subscriber = downstream.get();
         final long request = REQUESTED.get(this);
 
         final int credits;
