@@ -4,6 +4,7 @@
 package com.azure.core.amqp;
 
 import com.azure.core.amqp.exception.AmqpException;
+import com.azure.core.amqp.models.CreateLinkOptions;
 import com.azure.core.util.AsyncCloseable;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
@@ -40,6 +41,22 @@ public interface AmqpSession extends Disposable, AsyncCloseable {
      * @return A newly created AMQP link.
      */
     Mono<AmqpLink> createProducer(String linkName, String entityPath, Duration timeout, AmqpRetryPolicy retryPolicy);
+
+    /**
+     * Creates a new AMQP send link to publish messages.
+     *
+     * @param linkName Name of the link.
+     * @param entityPath The entity path this link connects to when producing events.
+     * @param timeout Timeout required for creating and opening AMQP link.
+     * @param retryPolicy The retry policy to use when sending messages.
+     * @param createLinkOptions Options used for creating link.
+     *
+     * @return A newly created AMQP send link.
+     */
+    default Mono<AmqpSendLink> createProducer(String linkName, String entityPath, Duration timeout,
+        AmqpRetryPolicy retryPolicy, CreateLinkOptions createLinkOptions) {
+        return Mono.empty();
+    }
 
     /**
      * Creates a new AMQP link that consumes events from the message broker.
@@ -81,6 +98,7 @@ public interface AmqpSession extends Disposable, AsyncCloseable {
      * Commit the transaction on the message broker.
      *
      * @param transaction to commit.
+     *
      * @return A completable mono.
      */
     Mono<Void> commitTransaction(AmqpTransaction transaction);
@@ -89,6 +107,7 @@ public interface AmqpSession extends Disposable, AsyncCloseable {
      * Rollback the transaction on the message broker.
      *
      * @param transaction to rollback
+     *
      * @return A completable mono.
      */
     Mono<Void> rollbackTransaction(AmqpTransaction transaction);
