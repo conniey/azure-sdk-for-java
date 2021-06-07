@@ -13,6 +13,10 @@ import com.azure.core.amqp.exception.AmqpErrorContext;
 import com.azure.core.amqp.exception.AmqpException;
 import com.azure.core.amqp.exception.OperationCancelledException;
 import com.azure.core.amqp.implementation.handler.SendLinkHandler;
+import com.azure.core.amqp.models.AmqpAnnotatedMessage;
+import com.azure.core.amqp.models.DeliveryOutcome;
+import com.azure.core.amqp.models.ReceiverSettleMode;
+import com.azure.core.amqp.models.SenderSettleMode;
 import com.azure.core.util.AsyncCloseable;
 import com.azure.core.util.logging.ClientLogger;
 import org.apache.qpid.proton.Proton;
@@ -35,6 +39,7 @@ import reactor.core.Disposable;
 import reactor.core.Disposables;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.MonoSink;
 import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Schedulers;
 
@@ -43,6 +48,7 @@ import java.io.Serializable;
 import java.nio.BufferOverflowException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -54,6 +60,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 import static com.azure.core.amqp.exception.AmqpErrorCondition.NOT_ALLOWED;
 import static com.azure.core.amqp.implementation.ClientConstants.MAX_AMQP_HEADER_SIZE_BYTES;
@@ -91,6 +99,8 @@ class ReactorSender implements AmqpSendLink, AsyncCloseable, AutoCloseable {
     private final Timer sendTimeoutTimer = new Timer("SendTimeout-timer");
 
     private final Object errorConditionLock = new Object();
+    private final SenderSettleMode senderSettleMode;
+    private final ReceiverSettleMode receiverSettleMode;
 
     private volatile Exception lastKnownLinkError;
     private volatile Instant lastKnownErrorReportedAt;
@@ -169,6 +179,14 @@ class ReactorSender implements AmqpSendLink, AsyncCloseable, AutoCloseable {
                     closeAsync("Authorization completed. Disposing.", null).subscribe();
                 }));
         }
+
+        this.senderSettleMode = sender.getSenderSettleMode() != null
+            ? SenderSettleMode.fromValue(sender.getSenderSettleMode().getValue().intValue())
+            : null;
+
+        this.receiverSettleMode = sender.getReceiverSettleMode() != null
+            ? ReceiverSettleMode.fromValue(sender.getReceiverSettleMode().getValue().intValue())
+            : null;
     }
 
     @Override
@@ -177,17 +195,22 @@ class ReactorSender implements AmqpSendLink, AsyncCloseable, AutoCloseable {
     }
 
     @Override
-    public Mono<Void> send(Message message) {
+    public Mono<DeliveryOutcome> send(AmqpAnnotatedMessage message) {
         return send(message, null);
     }
 
     @Override
-    public Mono<Void> send(Message message, DeliveryState deliveryState) {
+    public Mono<DeliveryOutcome> send(AmqpAnnotatedMessage annotatedMessage, DeliveryOutcome deliveryOutcome) {
         if (isDisposed.get()) {
             return Mono.error(new IllegalStateException(String.format(
                 "connectionId[%s] linkName[%s] Cannot publish message when disposed.", handler.getConnectionId(),
                 getLinkName())));
         }
+
+        final Message message = MessageUtils.toProtonJMessage(annotatedMessage);
+        final DeliveryState deliveryState = deliveryOutcome != null
+            ? MessageUtils.toProtonJDeliveryState(deliveryOutcome)
+            : null;
 
         return getLinkSize()
             .flatMap(maxMessageSize -> {
@@ -209,29 +232,32 @@ class ReactorSender implements AmqpSendLink, AsyncCloseable, AutoCloseable {
                     return Mono.error(error);
                 }
                 return send(bytes, encodedSize, DeliveryImpl.DEFAULT_MESSAGE_FORMAT, deliveryState);
-            }).then();
+            });
     }
 
     @Override
-    public Mono<Void> send(List<Message> messageBatch) {
+    public Mono<DeliveryOutcome> send(Iterable<AmqpAnnotatedMessage> messageBatch) {
         return send(messageBatch, null);
     }
 
     @Override
-    public Mono<Void> send(List<Message> messageBatch, DeliveryState deliveryState) {
+    public Mono<DeliveryOutcome> send(Iterable<AmqpAnnotatedMessage> messageBatch, DeliveryOutcome deliveryOutcome) {
         if (isDisposed.get()) {
             return Mono.error(new IllegalStateException(String.format(
                 "connectionId[%s] linkName[%s] Cannot publish data batch when disposed.", handler.getConnectionId(),
                 getLinkName())));
         }
 
-        if (messageBatch.size() == 1) {
-            return send(messageBatch.get(0), deliveryState);
+        final List<AmqpAnnotatedMessage> messageList = StreamSupport.stream(messageBatch.spliterator(), false)
+            .collect(Collectors.toList());
+
+        if (messageList.size() == 1) {
+            return send(messageList.get(0), deliveryOutcome);
         }
 
         return getLinkSize()
             .flatMap(maxMessageSize -> {
-                final Message firstMessage = messageBatch.get(0);
+                final Message firstMessage = MessageUtils.toProtonJMessage(messageList.get(0));
 
                 // proton-j doesn't support multiple dataSections to be part of AmqpMessage
                 // here's the alternate approach provided by them: https://github.com/apache/qpid-proton/pull/54
@@ -244,15 +270,16 @@ class ReactorSender implements AmqpSendLink, AsyncCloseable, AutoCloseable {
                 int encodedSize = batchMessage.encode(bytes, 0, maxMessageSizeTemp);
                 int byteArrayOffset = encodedSize;
 
-                for (final Message amqpMessage : messageBatch) {
+                for (final AmqpAnnotatedMessage amqpMessage : messageBatch) {
+                    final Message protonJMessage = MessageUtils.toProtonJMessage(amqpMessage);
                     final Message messageWrappedByData = Proton.message();
 
-                    int payloadSize = messageSerializer.getSize(amqpMessage);
+                    int payloadSize = messageSerializer.getSize(protonJMessage);
                     int allocationSize =
                         Math.min(payloadSize + MAX_AMQP_HEADER_SIZE_BYTES, maxMessageSizeTemp);
 
                     byte[] messageBytes = new byte[allocationSize];
-                    int messageSizeBytes = amqpMessage.encode(messageBytes, 0, allocationSize);
+                    int messageSizeBytes = protonJMessage.encode(messageBytes, 0, allocationSize);
                     messageWrappedByData.setBody(new Data(new Binary(messageBytes, 0, messageSizeBytes)));
 
                     try {
@@ -274,13 +301,9 @@ class ReactorSender implements AmqpSendLink, AsyncCloseable, AutoCloseable {
                     byteArrayOffset = byteArrayOffset + encodedSize;
                 }
 
-                return send(bytes, byteArrayOffset, AmqpConstants.AMQP_BATCH_MESSAGE_FORMAT, deliveryState);
-            }).then();
-    }
-
-    @Override
-    public AmqpErrorContext getErrorContext() {
-        return handler.getErrorContext(sender);
+                final DeliveryState state = MessageUtils.toProtonJDeliveryState(deliveryOutcome);
+                return send(bytes, byteArrayOffset, AmqpConstants.AMQP_BATCH_MESSAGE_FORMAT, state);
+            });
     }
 
     @Override
@@ -291,6 +314,26 @@ class ReactorSender implements AmqpSendLink, AsyncCloseable, AutoCloseable {
     @Override
     public String getEntityPath() {
         return entityPath;
+    }
+
+    @Override
+    public Flux<String> getOfferedCapabilities() {
+        return Flux.defer(() -> Flux.fromArray(sender.getOfferedCapabilities()).map(Symbol::toString));
+    }
+
+    @Override
+    public Iterable<String> getDesiredCapabilities() {
+        return Arrays.stream(sender.getDesiredCapabilities()).map(Symbol::toString).collect(Collectors.toList());
+    }
+
+    @Override
+    public SenderSettleMode getSenderSettleMode() {
+        return senderSettleMode;
+    }
+
+    @Override
+    public ReceiverSettleMode getReceiverSettleMode() {
+        return receiverSettleMode;
     }
 
     @Override
@@ -397,16 +440,15 @@ class ReactorSender implements AmqpSendLink, AsyncCloseable, AutoCloseable {
         return isClosedMono.asMono();
     }
 
-    @Override
-    public Mono<DeliveryState> send(byte[] bytes, int arrayOffset, int messageFormat, DeliveryState deliveryState) {
+    Mono<DeliveryOutcome> send(byte[] bytes, int arrayOffset, int messageFormat, DeliveryState deliveryState) {
         final Flux<EndpointState> activeEndpointFlux = RetryUtil.withRetry(
             handler.getEndpointStates().takeUntil(state -> state == EndpointState.ACTIVE), retryOptions,
             activeTimeoutMessage);
 
-        return activeEndpointFlux.then(Mono.create(sink -> {
+        return activeEndpointFlux.then(Mono.create((MonoSink<DeliveryState> sink) -> {
             sendWork(new RetriableWorkItem(bytes, arrayOffset, messageFormat, sink, retryOptions.getTryTimeout(),
                 deliveryState));
-        }));
+        })).map(state -> MessageUtils.toDeliveryOutcome(state));
     }
 
     /**

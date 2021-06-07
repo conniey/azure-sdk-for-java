@@ -3,7 +3,6 @@
 
 package com.azure.core.amqp.implementation;
 
-import com.azure.core.amqp.AmqpSendLink;
 import com.azure.core.amqp.AmqpTransaction;
 import com.azure.core.amqp.AmqpTransactionCoordinator;
 import com.azure.core.util.logging.ClientLogger;
@@ -27,10 +26,10 @@ final class TransactionCoordinator implements AmqpTransactionCoordinator {
 
     private final ClientLogger logger = new ClientLogger(TransactionCoordinator.class);
 
-    private final AmqpSendLink sendLink;
+    private final ReactorSender sendLink;
     private final MessageSerializer messageSerializer;
 
-    TransactionCoordinator(AmqpSendLink sendLink, MessageSerializer messageSerializer) {
+    TransactionCoordinator(ReactorSender sendLink, MessageSerializer messageSerializer) {
         this.sendLink = sendLink;
         this.messageSerializer = messageSerializer;
     }
