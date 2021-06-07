@@ -610,7 +610,7 @@ public class EventHubClientBuilder {
             prefetchCount = DEFAULT_PREFETCH_COUNT;
         }
 
-        final MessageSerializer messageSerializer = new EventHubMessageSerializer();
+        final EventHubMessageSerializer messageSerializer = new EventHubMessageSerializer();
 
         final EventHubConnectionProcessor processor;
         if (isSharedConnection.get()) {

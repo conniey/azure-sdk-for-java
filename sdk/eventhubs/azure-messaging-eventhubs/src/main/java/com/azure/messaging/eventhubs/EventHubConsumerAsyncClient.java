@@ -3,8 +3,7 @@
 
 package com.azure.messaging.eventhubs;
 
-import com.azure.core.amqp.implementation.AmqpReceiveLink;
-import com.azure.core.amqp.implementation.MessageSerializer;
+import com.azure.core.amqp.AmqpReceiveLink;
 import com.azure.core.amqp.implementation.StringUtil;
 import com.azure.core.annotation.ReturnType;
 import com.azure.core.annotation.ServiceClient;
@@ -66,7 +65,7 @@ public class EventHubConsumerAsyncClient implements Closeable {
     private final String fullyQualifiedNamespace;
     private final String eventHubName;
     private final EventHubConnectionProcessor connectionProcessor;
-    private final MessageSerializer messageSerializer;
+    private final EventHubMessageSerializer messageSerializer;
     private final String consumerGroup;
     private final int prefetchCount;
     private final boolean isSharedConnection;
@@ -79,8 +78,8 @@ public class EventHubConsumerAsyncClient implements Closeable {
         new ConcurrentHashMap<>();
 
     EventHubConsumerAsyncClient(String fullyQualifiedNamespace, String eventHubName,
-        EventHubConnectionProcessor connectionProcessor, MessageSerializer messageSerializer, String consumerGroup,
-        int prefetchCount, boolean isSharedConnection, Runnable onClientClosed) {
+        EventHubConnectionProcessor connectionProcessor, EventHubMessageSerializer messageSerializer,
+        String consumerGroup, int prefetchCount, boolean isSharedConnection, Runnable onClientClosed) {
         this.fullyQualifiedNamespace = fullyQualifiedNamespace;
         this.eventHubName = eventHubName;
         this.connectionProcessor = connectionProcessor;
