@@ -58,6 +58,7 @@ public class ReceiveLinkHandler extends LinkHandler {
                 getConnectionId(), entityPath, linkName);
             return false;
         });
+        credits.emitComplete(Sinks.EmitFailureHandler.FAIL_FAST);
 
         super.close();
 
@@ -71,7 +72,12 @@ public class ReceiveLinkHandler extends LinkHandler {
 
     @Override
     public void onLinkFlow(Event e) {
-        super.onLinkFlow(e);
+        if (e.getLink() == null) {
+            return;
+        }
+
+        final int remoteCredit = e.getLink().getRemoteCredit();
+        credits.emitNext(remoteCredit, Sinks.EmitFailureHandler.FAIL_FAST);
     }
 
     @Override
