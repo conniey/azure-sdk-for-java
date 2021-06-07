@@ -85,9 +85,16 @@ final class MessageUtils {
 
         // Setting message properties.
         final AmqpMessageProperties properties = message.getProperties();
-        response.setMessageId(properties.getMessageId());
+        if (properties.getMessageId() != null) {
+            response.setMessageId(properties.getMessageId().toString());
+        }
+
         response.setContentType(properties.getContentType());
-        response.setCorrelationId(properties.getCorrelationId());
+
+        if (properties.getCorrelationId() != null) {
+            response.setCorrelationId(properties.getCorrelationId().toString());
+        }
+
         response.setSubject(properties.getSubject());
 
         final AmqpAddress replyTo = properties.getReplyTo();
