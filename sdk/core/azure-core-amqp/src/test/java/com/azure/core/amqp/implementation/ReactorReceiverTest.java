@@ -43,7 +43,8 @@ import reactor.test.publisher.TestPublisher;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Map;
-import java.util.function.Supplier;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -72,8 +73,6 @@ class ReactorReceiverTest {
     private Record record;
     @Mock
     private ReactorDispatcher reactorDispatcher;
-    @Mock
-    private Supplier<Integer> creditSupplier;
     @Mock
     private AmqpConnection amqpConnection;
     @Mock
@@ -151,8 +150,6 @@ class ReactorReceiverTest {
 
         // Assert
         verify(receiver).flow(credits);
-
-        assertEquals(currentCredits, reactorReceiver.getCredits());
     }
 
     /**
@@ -185,6 +182,30 @@ class ReactorReceiverTest {
             .expectNext(AmqpEndpointState.ACTIVE)
             .then(() -> receiverHandler.close())
             .expectNext(AmqpEndpointState.CLOSED)
+            .verifyComplete();
+    }
+
+    /**
+     * Verifies credits are propagated.
+     */
+    @Test
+    void updateCreditsOnFlow() throws IOException {
+        final int credits = 12;
+        when(receiver.getRemoteCredit()).thenReturn(credits);
+        when(receiver.getLocalState()).thenReturn(EndpointState.ACTIVE);
+
+        doAnswer(invocation -> {
+            final Runnable work = invocation.getArgument(0);
+            work.run();
+
+            receiverHandler.onLinkRemoteClose(event);
+            return null;
+        }).when(reactorDispatcher).invoke(any(Runnable.class));
+
+        StepVerifier.create(reactorReceiver.getCredits())
+            .then(() -> receiverHandler.onLinkFlow(event))
+            .expectNext(credits)
+            .then(() -> reactorReceiver.close())
             .verifyComplete();
     }
 
@@ -243,7 +264,7 @@ class ReactorReceiverTest {
     }
 
     @Test
-    void addsMoreCreditsWhenPrefetchIsDone() throws IOException {
+    void addsMoreCreditsWhenPrefetchIsDone() throws IOException, InterruptedException {
         // Arrange
         // This message was copied from one that was received.
         final byte[] messageBytes = new byte[] { 0, 83, 114, -63, 73, 6, -93, 21, 120, 45, 111, 112, 116, 45, 115, 101,
@@ -262,14 +283,13 @@ class ReactorReceiverTest {
         when(delivery.isSettled()).thenReturn(false);
         when(delivery.pending()).thenReturn(messageBytes.length);
 
-        when(receiver.getRemoteCredit()).thenReturn(0);
+        final int remoteCredits = 15;
+        when(receiver.getRemoteCredit()).thenReturn(remoteCredits);
         when(receiver.recv(any(), eq(0), eq(messageBytes.length))).thenAnswer(invocation -> {
             final byte[] buffer = invocation.getArgument(0);
             System.arraycopy(messageBytes, 0, buffer, 0, messageBytes.length);
             return messageBytes.length;
         });
-
-        final int creditsToAdd = 10;
 
         doAnswer(invocation -> {
             final Runnable work = invocation.getArgument(0);
@@ -277,13 +297,13 @@ class ReactorReceiverTest {
             return null;
         }).when(reactorDispatcher).invoke(any(Runnable.class));
 
-        when(creditSupplier.get()).thenReturn(creditsToAdd);
-
-        doAnswer(invocationOnMock -> {
-            final Runnable work = invocationOnMock.getArgument(0);
-            work.run();
-            return null;
-        }).when(reactorDispatcher).invoke(any(Runnable.class));
+        final AtomicInteger currentCredits = new AtomicInteger(-1);
+        final Semaphore semaphore = new Semaphore(1);
+        semaphore.acquire();
+        reactorReceiver.getCredits().subscribe(credits -> {
+            semaphore.release();
+            currentCredits.set(credits);
+        });
 
         // Act & Assert
         StepVerifier.create(reactorReceiver.receive())
@@ -299,9 +319,9 @@ class ReactorReceiverTest {
             .thenCancel()
             .verify();
 
-        verify(creditSupplier).get();
-
-        verify(receiver).flow(creditsToAdd);
+        // Assert that we emitted a number of credits after emitting a delivery.
+        semaphore.acquire();
+        assertEquals(remoteCredits, currentCredits.get());
     }
 
     /**
