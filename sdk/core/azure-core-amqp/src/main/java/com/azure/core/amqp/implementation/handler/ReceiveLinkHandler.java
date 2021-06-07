@@ -26,6 +26,7 @@ public class ReceiveLinkHandler extends LinkHandler {
     private final AtomicBoolean isTerminated = new AtomicBoolean();
     private final Sinks.Many<Delivery> deliveries = Sinks.many().multicast().onBackpressureBuffer();
     private final Set<Delivery> queuedDeliveries = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private final Sinks.Many<Integer> credits = Sinks.many().multicast().directBestEffort();
     private final String entityPath;
 
     public ReceiveLinkHandler(String connectionId, String hostname, String linkName, String entityPath) {
@@ -42,6 +43,10 @@ public class ReceiveLinkHandler extends LinkHandler {
         return deliveries.asFlux().doOnNext(queuedDeliveries::remove);
     }
 
+    public Flux<Integer> getCredits() {
+        return credits.asFlux();
+    }
+
     @Override
     public void close() {
         if (isTerminated.getAndSet(true)) {
@@ -53,6 +58,7 @@ public class ReceiveLinkHandler extends LinkHandler {
                 getConnectionId(), entityPath, linkName);
             return false;
         });
+        credits.emitComplete(Sinks.EmitFailureHandler.FAIL_FAST);
 
         super.close();
 
@@ -62,6 +68,16 @@ public class ReceiveLinkHandler extends LinkHandler {
             delivery.settle();
         });
         queuedDeliveries.clear();
+    }
+
+    @Override
+    public void onLinkFlow(Event e) {
+        if (e.getLink() == null) {
+            return;
+        }
+
+        final int remoteCredit = e.getLink().getRemoteCredit();
+        credits.emitNext(remoteCredit, Sinks.EmitFailureHandler.FAIL_FAST);
     }
 
     @Override
@@ -91,6 +107,8 @@ public class ReceiveLinkHandler extends LinkHandler {
             logger.info("onLinkRemoteOpen connectionId[{}], entityPath[{}], linkName[{}], action[waitingForError]",
                 getConnectionId(), entityPath, link.getName());
         }
+
+        credits.emitNext(link.getRemoteCredit(), Sinks.EmitFailureHandler.FAIL_FAST);
     }
 
     @Override
