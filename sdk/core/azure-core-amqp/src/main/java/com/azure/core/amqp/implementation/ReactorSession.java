@@ -9,6 +9,7 @@ import com.azure.core.amqp.AmqpLink;
 import com.azure.core.amqp.AmqpReceiveLink;
 import com.azure.core.amqp.AmqpRetryOptions;
 import com.azure.core.amqp.AmqpRetryPolicy;
+import com.azure.core.amqp.AmqpSendLink;
 import com.azure.core.amqp.AmqpSession;
 import com.azure.core.amqp.AmqpShutdownSignal;
 import com.azure.core.amqp.AmqpTransaction;

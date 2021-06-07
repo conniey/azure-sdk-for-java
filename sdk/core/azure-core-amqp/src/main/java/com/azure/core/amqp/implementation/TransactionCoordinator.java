@@ -3,6 +3,7 @@
 
 package com.azure.core.amqp.implementation;
 
+import com.azure.core.amqp.AmqpSendLink;
 import com.azure.core.amqp.AmqpTransaction;
 import com.azure.core.amqp.AmqpTransactionCoordinator;
 import com.azure.core.util.logging.ClientLogger;
