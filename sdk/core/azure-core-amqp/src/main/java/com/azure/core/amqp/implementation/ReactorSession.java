@@ -390,10 +390,10 @@ public class ReactorSession implements AmqpSession {
             .map(link -> {
                 final TransactionCoordinator newCoordinator = new TransactionCoordinator(link, messageSerializer);
                 if (transactionCoordinator.compareAndSet(null, newCoordinator)) {
-                return newCoordinator;
-            } else {
-                return transactionCoordinator.get();
-            }
+                    return newCoordinator;
+                } else {
+                    return transactionCoordinator.get();
+                }
             })
             .or(onClosedError(String.format(
                 "connectionId[%s] Connection closed while waiting for transaction coordinator creation.",
@@ -487,11 +487,13 @@ public class ReactorSession implements AmqpSession {
 
         final Source source = getSource(linkOptions);
         final SenderSettleMode senderSettleMode = getSenderSettleMode(linkOptions);
+        final ReceiverSettleMode receiverSettleMode = getReceiverSettleMode(linkOptions);
         final Sender sender = session.sender(linkName);
 
         sender.setTarget(target);
         sender.setSource(source);
         sender.setSenderSettleMode(senderSettleMode);
+        sender.setReceiverSettleMode(receiverSettleMode);
 
         if (linkOptions.getLinkProperties() != null && linkOptions.getLinkProperties().size() > 0) {
             final Map<Symbol, Object> properties = MessageUtils.convertToSymbolMap(linkOptions.getLinkProperties());
