@@ -17,6 +17,7 @@ import com.azure.core.amqp.exception.AmqpErrorCondition;
 import com.azure.core.amqp.exception.AmqpResponseCode;
 import com.azure.core.amqp.implementation.handler.SendLinkHandler;
 import com.azure.core.amqp.implementation.handler.SessionHandler;
+import com.azure.core.amqp.models.CreateLinkOptions;
 import org.apache.qpid.proton.amqp.Symbol;
 import org.apache.qpid.proton.amqp.transaction.Coordinator;
 import org.apache.qpid.proton.amqp.transport.ErrorCondition;
@@ -42,8 +43,8 @@ import reactor.test.publisher.TestPublisher;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.HashMap;
-import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -178,7 +179,7 @@ public class ReactorSessionTest {
             .setMode(AmqpRetryMode.FIXED);
         final AmqpRetryPolicy amqpRetryPolicy = new FixedAmqpRetryPolicy(options);
 
-        final Map<Symbol, Object> linkProperties = new HashMap<>();
+        final CreateLinkOptions createLinkOptions = new CreateLinkOptions().setLinkProperties( new HashMap<>());
         final TokenManager tokenManager = mock(TokenManager.class);
         final SendLinkHandler sendLinkHandler = new SendLinkHandler(ID, HOST, linkName, entityPath);
 
@@ -192,15 +193,15 @@ public class ReactorSessionTest {
         when(reactorHandlerProvider.createSendLinkHandler(ID, HOST, linkName, entityPath))
             .thenReturn(sendLinkHandler);
 
-        StepVerifier.create(
-            reactorSession.createProducer(linkName, entityPath, timeout, amqpRetryPolicy, linkProperties))
+        StepVerifier.create(reactorSession.createProducer(linkName, entityPath, timeout, amqpRetryPolicy,
+            createLinkOptions))
             .then(() -> handler.onSessionRemoteOpen(event))
             .thenAwait(Duration.ofSeconds(2))
             .assertNext(producer -> assertTrue(producer instanceof ReactorSender))
             .verifyComplete();
 
         final AmqpLink sendLink = reactorSession.createProducer(linkName, entityPath, timeout, amqpRetryPolicy,
-            linkProperties)
+            createLinkOptions)
             .block(TIMEOUT);
 
         assertNotNull(sendLink);
@@ -221,7 +222,7 @@ public class ReactorSessionTest {
             .setMode(AmqpRetryMode.FIXED);
         final AmqpRetryPolicy amqpRetryPolicy = new FixedAmqpRetryPolicy(options);
 
-        final Map<Symbol, Object> linkProperties = new HashMap<>();
+        final CreateLinkOptions linkProperties = new CreateLinkOptions();
         final TokenManager tokenManager = mock(TokenManager.class);
         final SendLinkHandler sendLinkHandler = new SendLinkHandler(ID, HOST, linkName, entityPath);
 
@@ -243,14 +244,15 @@ public class ReactorSessionTest {
 
         handler.onSessionRemoteOpen(event);
 
-        final AmqpLink sendLink = reactorSession.createProducer(linkName, entityPath, timeout, amqpRetryPolicy,
-            linkProperties)
-            .block(TIMEOUT);
+        // Act & Assert
+        StepVerifier.create(reactorSession.createProducer(linkName, entityPath, timeout, amqpRetryPolicy,
+            linkProperties))
+            .assertNext(link -> {
+                assertEquals(linkName, link.getLinkName());
+                assertEquals(entityPath, link.getEntityPath());
+            })
+            .verifyComplete();
 
-        assertNotNull(sendLink);
-        assertTrue(sendLink instanceof AmqpSendLink);
-
-        // Act
         sendLinkHandler.onLinkRemoteClose(closeSendEvent);
     }
 
