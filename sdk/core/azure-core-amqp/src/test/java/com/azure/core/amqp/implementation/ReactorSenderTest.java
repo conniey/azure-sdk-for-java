@@ -8,17 +8,20 @@ import com.azure.core.amqp.AmqpEndpointState;
 import com.azure.core.amqp.AmqpRetryMode;
 import com.azure.core.amqp.AmqpRetryOptions;
 import com.azure.core.amqp.AmqpShutdownSignal;
+import com.azure.core.amqp.AmqpTransaction;
 import com.azure.core.amqp.exception.AmqpErrorCondition;
 import com.azure.core.amqp.exception.AmqpErrorContext;
 import com.azure.core.amqp.exception.AmqpException;
 import com.azure.core.amqp.exception.AmqpResponseCode;
 import com.azure.core.amqp.exception.OperationCancelledException;
 import com.azure.core.amqp.implementation.handler.SendLinkHandler;
-import org.apache.qpid.proton.Proton;
+import com.azure.core.amqp.models.AmqpAnnotatedMessage;
+import com.azure.core.amqp.models.AmqpMessageBody;
+import com.azure.core.amqp.models.AmqpMessageId;
+import com.azure.core.amqp.models.TransactionalDeliveryOutcome;
 import org.apache.qpid.proton.amqp.Symbol;
 import org.apache.qpid.proton.amqp.UnsignedLong;
 import org.apache.qpid.proton.amqp.messaging.Accepted;
-import org.apache.qpid.proton.amqp.messaging.AmqpValue;
 import org.apache.qpid.proton.amqp.transaction.TransactionalState;
 import org.apache.qpid.proton.amqp.transport.DeliveryState;
 import org.apache.qpid.proton.amqp.transport.ErrorCondition;
@@ -26,7 +29,6 @@ import org.apache.qpid.proton.engine.Delivery;
 import org.apache.qpid.proton.engine.EndpointState;
 import org.apache.qpid.proton.engine.Sender;
 import org.apache.qpid.proton.engine.impl.DeliveryImpl;
-import org.apache.qpid.proton.message.Message;
 import org.apache.qpid.proton.reactor.Reactor;
 import org.apache.qpid.proton.reactor.Selectable;
 import org.junit.jupiter.api.AfterAll;
@@ -46,6 +48,8 @@ import reactor.test.StepVerifier;
 import reactor.test.publisher.TestPublisher;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -53,6 +57,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
@@ -97,7 +102,8 @@ public class ReactorSenderTest {
     private  ArgumentCaptor<DeliveryState> deliveryStateArgumentCaptor;
 
     private final TestPublisher<AmqpResponseCode> authorizationResults = TestPublisher.createCold();
-    private Message message;
+    private AmqpAnnotatedMessage message;
+
     private AmqpRetryOptions options;
     private AutoCloseable mocksCloseable;
 
@@ -136,9 +142,9 @@ public class ReactorSenderTest {
             .setTryTimeout(Duration.ofSeconds(2))
             .setMode(AmqpRetryMode.EXPONENTIAL);
 
-        message = Proton.message();
-        message.setMessageId("id");
-        message.setBody(new AmqpValue("hello"));
+        AmqpMessageBody messageBody = AmqpMessageBody.fromData("hello".getBytes(StandardCharsets.UTF_8));
+        message = new AmqpAnnotatedMessage(messageBody);
+        message.getProperties().setMessageId(new AmqpMessageId("id"));
     }
 
     @AfterEach
@@ -167,11 +173,11 @@ public class ReactorSenderTest {
         final ReactorSender reactorSender = new ReactorSender(amqpConnection, ENTITY_PATH, sender, handler,
             reactorProvider, tokenManager, messageSerializer, options);
 
-        StepVerifier.create(reactorSender.getLinkSize())
-            .expectNext(1000)
+        StepVerifier.create(reactorSender.getMaxMessageSizeInBytes())
+            .expectNext(1000L)
             .verifyComplete();
-        StepVerifier.create(reactorSender.getLinkSize())
-            .expectNext(1000)
+        StepVerifier.create(reactorSender.getMaxMessageSizeInBytes())
+            .expectNext(1000L)
             .verifyComplete();
 
         verify(sender).getRemoteMaxMessageSize();
@@ -186,12 +192,17 @@ public class ReactorSenderTest {
             reactorProvider, tokenManager, messageSerializer, options);
         final ReactorSender spyReactorSender = spy(reactorSender);
 
+        final ByteBuffer buffer = ByteBuffer.wrap("transaction-id".getBytes(StandardCharsets.UTF_8));
+        final AmqpTransaction transaction = new AmqpTransaction(buffer);
+        final TransactionalDeliveryOutcome transactionalDeliveryOutcome = new TransactionalDeliveryOutcome(transaction);
+
         final Throwable exception = new RuntimeException(exceptionString);
         doReturn(Mono.error(exception)).when(spyReactorSender).send(any(byte[].class), anyInt(), anyInt(),
-            eq(transactionalState));
+            argThat(state -> state instanceof TransactionalState
+                && buffer.equals(((TransactionalState) state).getTxnId().asByteBuffer())));
 
         // Act
-        StepVerifier.create(spyReactorSender.send(message, transactionalState))
+        StepVerifier.create(spyReactorSender.send(message, transactionalDeliveryOutcome))
             .verifyErrorMessage(exceptionString);
 
         // Assert
@@ -210,13 +221,18 @@ public class ReactorSenderTest {
             reactorProvider, tokenManager, messageSerializer, options);
         final ReactorSender spyReactorSender = spy(reactorSender);
 
+        final ByteBuffer buffer = ByteBuffer.wrap("transaction-id".getBytes(StandardCharsets.UTF_8));
+        final AmqpTransaction transaction = new AmqpTransaction(buffer);
+        final TransactionalDeliveryOutcome transactionalDeliveryOutcome = new TransactionalDeliveryOutcome(transaction);
+
         doReturn(Mono.empty()).when(spyReactorSender).send(any(byte[].class), anyInt(), anyInt(),
-            eq(transactionalState));
+            argThat(state -> state instanceof TransactionalState
+                && buffer.equals(((TransactionalState) state).getTxnId().asByteBuffer())));
 
         // Act
-        StepVerifier.create(spyReactorSender.send(message, transactionalState))
+        StepVerifier.create(spyReactorSender.send(message, transactionalDeliveryOutcome))
             .verifyComplete();
-        StepVerifier.create(spyReactorSender.send(message, transactionalState))
+        StepVerifier.create(spyReactorSender.send(message, transactionalDeliveryOutcome))
             .verifyComplete();
 
         // Assert
@@ -237,6 +253,10 @@ public class ReactorSenderTest {
         final ReactorSender reactorSender = new ReactorSender(amqpConnection, ENTITY_PATH, sender, handler,
             reactorProvider, tokenManager, messageSerializer, options);
 
+        final ByteBuffer buffer = ByteBuffer.wrap("transaction-id".getBytes(StandardCharsets.UTF_8));
+        final AmqpTransaction transaction = new AmqpTransaction(buffer);
+        final TransactionalDeliveryOutcome transactionalDeliveryOutcome = new TransactionalDeliveryOutcome(transaction);
+
         // Creating delivery for sending.
         final Delivery deliveryToSend = mock(Delivery.class);
         doNothing().when(deliveryToSend).setMessageFormat(anyInt());
@@ -250,7 +270,7 @@ public class ReactorSenderTest {
         }).when(reactorDispatcher).invoke(any(Runnable.class));
 
         // Act
-        StepVerifier.create(reactorSender.send(message, transactionalState))
+        StepVerifier.create(reactorSender.send(message, transactionalDeliveryOutcome))
             .expectError(AmqpException.class) // Because we did not process a "delivered message", it'll timeout.
             .verify();
 
@@ -284,9 +304,8 @@ public class ReactorSenderTest {
     @Test
     public void testSendBatch() {
         // Arrange
-        final Message message2 = Proton.message();
-        message2.setMessageId("id2");
-        message2.setBody(new AmqpValue("world"));
+        final AmqpAnnotatedMessage message2 =
+            new AmqpAnnotatedMessage(AmqpMessageBody.fromData("foo".getBytes(StandardCharsets.UTF_8)));
 
         final ReactorSender reactorSender = new ReactorSender(amqpConnection, ENTITY_PATH, sender, handler,
             reactorProvider, tokenManager, messageSerializer, options);
@@ -302,7 +321,8 @@ public class ReactorSenderTest {
 
         // Assert
         verify(sender, times(1)).getRemoteMaxMessageSize();
-        verify(spyReactorSender, times(2)).send(any(byte[].class), anyInt(), anyInt(), isNull());
+        verify(spyReactorSender, times(2)).send(any(byte[].class), anyInt(), anyInt(),
+            isNull());
     }
 
     @Test
@@ -514,7 +534,8 @@ public class ReactorSenderTest {
         final ReactorSender reactorSender = new ReactorSender(amqpConnection, ENTITY_PATH, sender, handler,
             reactorProvider, tokenManager, messageSerializer, options);
         final UnsupportedOperationException testException = new UnsupportedOperationException("test-exception");
-        final Message message = Proton.message();
+        final AmqpAnnotatedMessage message = new AmqpAnnotatedMessage(
+            AmqpMessageBody.fromData("foo".getBytes(StandardCharsets.UTF_8)));
         final UnsignedLong size = new UnsignedLong(2048L);
         when(sender.getRemoteMaxMessageSize()).thenReturn(size);
 
@@ -549,7 +570,8 @@ public class ReactorSenderTest {
         // Arrange
         final ReactorSender reactorSender = new ReactorSender(amqpConnection, ENTITY_PATH, sender, handler,
             reactorProvider, tokenManager, messageSerializer, options);
-        final Message message = Proton.message();
+        final AmqpAnnotatedMessage message = new AmqpAnnotatedMessage(
+            AmqpMessageBody.fromData("foo".getBytes(StandardCharsets.UTF_8)));
         final UnsignedLong size = new UnsignedLong(2048L);
         when(sender.getRemoteMaxMessageSize()).thenReturn(size);
 
@@ -596,7 +618,7 @@ public class ReactorSenderTest {
         final AmqpException error = new AmqpException(false, AmqpErrorCondition.ILLEGAL_STATE, "not-allowed",
             new AmqpErrorContext("foo-bar"));
 
-        final Message message = mock(Message.class);
+        final AmqpAnnotatedMessage message = mock(AmqpAnnotatedMessage.class);
 
         doAnswer(invocationOnMock -> {
             final Runnable work = invocationOnMock.getArgument(0);
