@@ -35,9 +35,9 @@ public interface AmqpReceiveLink extends AmqpLink {
     Mono<Void> addCredits(int credits);
 
     /**
-     * Gets the current number of credits this link has.
+     * Gets a stream with the current number of credits this link has.
      *
      * @return The number of credits (deliveries) this link has.
      */
-    int getCredits();
+    Flux<Integer> getCredits();
 }
