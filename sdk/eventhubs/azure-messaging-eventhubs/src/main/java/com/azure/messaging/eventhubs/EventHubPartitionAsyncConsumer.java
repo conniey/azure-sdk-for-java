@@ -3,7 +3,7 @@
 
 package com.azure.messaging.eventhubs;
 
-import com.azure.core.amqp.implementation.MessageSerializer;
+import com.azure.core.amqp.models.AmqpAnnotatedMessage;
 import com.azure.core.util.logging.ClientLogger;
 import com.azure.messaging.eventhubs.implementation.AmqpReceiveLinkProcessor;
 import com.azure.messaging.eventhubs.models.EventPosition;
@@ -11,7 +11,6 @@ import com.azure.messaging.eventhubs.models.LastEnqueuedEventProperties;
 import com.azure.messaging.eventhubs.models.PartitionContext;
 import com.azure.messaging.eventhubs.models.PartitionEvent;
 import com.azure.messaging.eventhubs.models.ReceiveOptions;
-import org.apache.qpid.proton.message.Message;
 import reactor.core.publisher.Flux;
 
 import java.util.Objects;
@@ -28,7 +27,7 @@ class EventHubPartitionAsyncConsumer implements AutoCloseable {
     private final AtomicBoolean isDisposed = new AtomicBoolean();
     private final AtomicReference<LastEnqueuedEventProperties> lastEnqueuedEventProperties = new AtomicReference<>();
     private final AmqpReceiveLinkProcessor amqpReceiveLinkProcessor;
-    private final MessageSerializer messageSerializer;
+    private final EventHubMessageSerializer messageSerializer;
     private final String fullyQualifiedNamespace;
     private final String eventHubName;
     private final String consumerGroup;
@@ -40,8 +39,8 @@ class EventHubPartitionAsyncConsumer implements AutoCloseable {
     private volatile Long currentOffset;
 
     EventHubPartitionAsyncConsumer(AmqpReceiveLinkProcessor amqpReceiveLinkProcessor,
-        MessageSerializer messageSerializer, String fullyQualifiedNamespace, String eventHubName, String consumerGroup,
-        String partitionId, AtomicReference<Supplier<EventPosition>> currentEventPosition,
+        EventHubMessageSerializer messageSerializer, String fullyQualifiedNamespace, String eventHubName,
+        String consumerGroup, String partitionId, AtomicReference<Supplier<EventPosition>> currentEventPosition,
         boolean trackLastEnqueuedEventProperties) {
         this.initialPosition = Objects.requireNonNull(currentEventPosition.get().get(),
             "'currentEventPosition.get().get()' cannot be null.");
@@ -115,12 +114,12 @@ class EventHubPartitionAsyncConsumer implements AutoCloseable {
      *
      * @return The deserialized {@link EventData} with partition information.
      */
-    private PartitionEvent onMessageReceived(Message message) {
-        final EventData event = messageSerializer.deserialize(message, EventData.class);
+    private PartitionEvent onMessageReceived(AmqpAnnotatedMessage message) {
+        final EventData event = messageSerializer.getEventData(message);
 
         if (trackLastEnqueuedEventProperties) {
             final LastEnqueuedEventProperties enqueuedEventProperties =
-                messageSerializer.deserialize(message, LastEnqueuedEventProperties.class);
+                messageSerializer.getLastEnqueuedEventProperties(message);
 
             if (enqueuedEventProperties != null) {
                 final LastEnqueuedEventProperties updated = new LastEnqueuedEventProperties(
