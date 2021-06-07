@@ -179,7 +179,7 @@ public class ReactorSessionTest {
             .setMode(AmqpRetryMode.FIXED);
         final AmqpRetryPolicy amqpRetryPolicy = new FixedAmqpRetryPolicy(options);
 
-        final CreateLinkOptions createLinkOptions = new CreateLinkOptions().setLinkProperties( new HashMap<>());
+        final CreateLinkOptions createLinkOptions = new CreateLinkOptions().setLinkProperties(new HashMap<>());
         final TokenManager tokenManager = mock(TokenManager.class);
         final SendLinkHandler sendLinkHandler = new SendLinkHandler(ID, HOST, linkName, entityPath);
 
