@@ -144,11 +144,11 @@ final class MessageUtils {
         response.setFooter(new Footer(message.getFooter()));
 
         // Set message annotations.
-        final Map<Symbol, Object> messageAnnotations = convert(message.getMessageAnnotations());
+        final Map<Symbol, Object> messageAnnotations = convertToSymbolMap(message.getMessageAnnotations());
         response.setMessageAnnotations(new MessageAnnotations(messageAnnotations));
 
         // Set Delivery Annotations.
-        final Map<Symbol, Object> deliveryAnnotations = convert(message.getDeliveryAnnotations());
+        final Map<Symbol, Object> deliveryAnnotations = convertToSymbolMap(message.getDeliveryAnnotations());
         response.setDeliveryAnnotations(new DeliveryAnnotations(deliveryAnnotations));
 
         // Set application properties
@@ -469,7 +469,7 @@ final class MessageUtils {
         }
 
         final ModifiedDeliveryOutcome modifiedDeliveryOutcome = (ModifiedDeliveryOutcome) outcome;
-        final Map<Symbol, Object> annotations = convert(modifiedDeliveryOutcome.getMessageAnnotations());
+        final Map<Symbol, Object> annotations = convertToSymbolMap(modifiedDeliveryOutcome.getMessageAnnotations());
 
         modified.setMessageAnnotations(annotations);
         modified.setUndeliverableHere(modifiedDeliveryOutcome.isUndeliverableHere());
@@ -494,7 +494,7 @@ final class MessageUtils {
         final ErrorCondition condition = new ErrorCondition(
             Symbol.getSymbol(errorCondition.getErrorCondition()), errorCondition.toString());
 
-        condition.setInfo(convert(rejectedDeliveryOutcome.getErrorInfo()));
+        condition.setInfo(convertToSymbolMap(rejectedDeliveryOutcome.getErrorInfo()));
 
         rejected.setError(condition);
         return rejected;
@@ -574,7 +574,7 @@ final class MessageUtils {
      *
      * @return A map with corresponding keys as symbols.
      */
-    private static Map<Symbol, Object> convert(Map<String, Object> sourceMap) {
+    static Map<Symbol, Object> convertToSymbolMap(Map<String, Object> sourceMap) {
         if (sourceMap == null) {
             return null;
         }
