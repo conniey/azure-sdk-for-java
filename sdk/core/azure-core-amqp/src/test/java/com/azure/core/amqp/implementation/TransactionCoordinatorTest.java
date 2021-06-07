@@ -39,7 +39,7 @@ public class TransactionCoordinatorTest {
     @Mock
     private MessageSerializer messageSerializer;
     @Mock
-    private AmqpSendLink sendLink;
+    private ReactorSender sendLink;
     private AutoCloseable mocksCloseable;
 
     @BeforeEach
