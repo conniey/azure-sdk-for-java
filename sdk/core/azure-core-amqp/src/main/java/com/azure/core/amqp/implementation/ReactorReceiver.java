@@ -277,6 +277,7 @@ public class ReactorReceiver implements AmqpReceiveLink, AsyncCloseable, AutoClo
         });
 
         subscriptions.dispose();
+        credits.emitComplete(Sinks.EmitFailureHandler.FAIL_FAST);
 
         if (tokenManager != null) {
             tokenManager.close();
