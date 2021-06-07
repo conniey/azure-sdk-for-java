@@ -30,8 +30,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 
 import static com.azure.core.amqp.implementation.ClientConstants.NOT_APPLICABLE;
 import static com.azure.core.util.FluxUtil.monoError;
@@ -54,8 +52,6 @@ public class ReactorReceiver implements AmqpReceiveLink, AsyncCloseable, AutoClo
     private final Flux<AmqpEndpointState> endpointStates;
     private final Sinks.Many<Integer> credits = Sinks.many().multicast().directBestEffort();
 
-    private final AtomicReference<Supplier<Integer>> creditSupplier = new AtomicReference<>();
-
     protected ReactorReceiver(AmqpConnection amqpConnection, String entityPath, Receiver receiver,
         ReceiveLinkHandler handler, TokenManager tokenManager, ReactorDispatcher dispatcher,
         AmqpRetryOptions retryOptions) {
@@ -76,26 +72,7 @@ public class ReactorReceiver implements AmqpReceiveLink, AsyncCloseable, AutoClo
                             final Message message = decodeDelivery(delivery);
                             final int creditsLeft = receiver.getRemoteCredit();
 
-                            if (creditsLeft > 0) {
-                                sink.success(message);
-                                return;
-                            }
-
                             credits.emitNext(creditsLeft, Sinks.EmitFailureHandler.FAIL_FAST);
-
-                            // TODO.
-                            final Supplier<Integer> supplier = creditSupplier.get();
-                            final Integer credits = supplier.get();
-
-                            if (credits != null && credits > 0) {
-                                logger.info("connectionId[{}] linkName[{}] adding credits[{}]",
-                                    handler.getConnectionId(), getLinkName(), creditsLeft, credits);
-                                receiver.flow(credits);
-                            } else {
-                                logger.verbose("connectionId[{}] linkName[{}] There are no credits to add.",
-                                    handler.getConnectionId(), getLinkName(), creditsLeft, credits);
-                            }
-
                             sink.success(message);
                         });
                     } catch (IOException e) {
@@ -133,6 +110,10 @@ public class ReactorReceiver implements AmqpReceiveLink, AsyncCloseable, AutoClo
 
         //@formatter:off
         this.subscriptions = Disposables.composite(
+            this.handler.getCredits().subscribe(credit -> {
+                // Takes into consideration the flow frame which may be used to synchronize credit counts.
+                this.credits.emitNext(credit, Sinks.EmitFailureHandler.FAIL_FAST);
+            }),
             this.endpointStates.subscribe(),
             this.tokenManager.getAuthorizationResults()
                 .onErrorResume(error -> {
@@ -167,7 +148,7 @@ public class ReactorReceiver implements AmqpReceiveLink, AsyncCloseable, AutoClo
 
     @Override
     public Flux<AmqpEndpointState> getEndpointStates() {
-        return endpointStates.distinct();
+        return endpointStates.distinctUntilChanged();
     }
 
     @Override
