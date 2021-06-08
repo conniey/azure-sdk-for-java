@@ -18,6 +18,7 @@ import com.azure.core.amqp.exception.AmqpException;
 import com.azure.core.amqp.implementation.handler.ReceiveLinkHandler;
 import com.azure.core.amqp.implementation.handler.SendLinkHandler;
 import com.azure.core.amqp.implementation.handler.SessionHandler;
+import com.azure.core.amqp.models.CreateLinkOptions;
 import com.azure.core.util.logging.ClientLogger;
 import org.apache.qpid.proton.amqp.Symbol;
 import org.apache.qpid.proton.amqp.messaging.Source;
@@ -46,6 +47,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.StreamSupport;
 
 import static com.azure.core.amqp.implementation.ClientConstants.NOT_APPLICABLE;
 
@@ -222,6 +224,24 @@ public class ReactorSession implements AmqpSession {
                 "connectionId[%s] entityPath[%s] linkName[%s] Connection closed while waiting for new receive link.",
                 sessionHandler.getConnectionId(), entityPath, linkName)))
             .cast(AmqpLink.class);
+    }
+
+    @Override
+    public Mono<AmqpReceiveLink> createConsumer(String linkName, String entityPath, Duration timeout,
+        AmqpRetryPolicy retryPolicy, CreateLinkOptions createLinkOptions) {
+
+        final Map<Symbol, Object> sourceFilter = createLinkOptions.getLinkSource() != null
+            ? MessageUtils.convert(createLinkOptions.getLinkSource().getFilters())
+            : null;
+
+        final Map<Symbol, Object> receiverProperties = MessageUtils.convert(createLinkOptions.getLinkProperties());
+        final Symbol[] desiredCapabilities = createLinkOptions.getDesiredCapabilities() != null
+            ? StreamSupport.stream(createLinkOptions.getDesiredCapabilities().spliterator(), false)
+            .map(Symbol::valueOf).toArray(Symbol[]::new)
+            : null;
+
+        return createConsumer(linkName, entityPath, timeout, retryPolicy, sourceFilter, receiverProperties,
+            desiredCapabilities, getSenderSettleMode(createLinkOptions), getReceiverSettleMode(createLinkOptions));
     }
 
     /**
@@ -694,6 +714,38 @@ public class ReactorSession implements AmqpSession {
             }
 
             return removed != null;
+        }
+    }
+
+    private SenderSettleMode getSenderSettleMode(CreateLinkOptions options) {
+        if (options.getSenderSettleMode() == null) {
+            return SenderSettleMode.SETTLED;
+        }
+
+        switch (options.getSenderSettleMode()) {
+            case UNSETTLED:
+                return SenderSettleMode.UNSETTLED;
+            case SETTLED:
+                return SenderSettleMode.SETTLED;
+            case MIXED:
+                return SenderSettleMode.MIXED;
+            default:
+                throw logger.logExceptionAsError(new UnsupportedOperationException("SenderSettleMode is unsupported."));
+        }
+    }
+
+    private ReceiverSettleMode getReceiverSettleMode(CreateLinkOptions options) {
+        if (options.getReceiverSettleMode() == null) {
+            return ReceiverSettleMode.SECOND;
+        }
+
+        switch (options.getReceiverSettleMode()) {
+            case SECOND:
+                return ReceiverSettleMode.SECOND;
+            case FIRST:
+                return ReceiverSettleMode.FIRST;
+            default:
+                throw logger.logExceptionAsError(new UnsupportedOperationException("ReceiverSettleMode is unsupported."));
         }
     }
 
