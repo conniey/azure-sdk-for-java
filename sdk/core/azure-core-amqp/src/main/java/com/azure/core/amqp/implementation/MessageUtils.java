@@ -468,6 +468,24 @@ final class MessageUtils {
         }
     }
 
+    /**
+     * Converts a map from it's string keys to use {@link Symbol}.
+     *
+     * @param sourceMap Source map.
+     *
+     * @return A map with corresponding keys as symbols.
+     */
+    static Map<Symbol, Object> convert(Map<String, Object> sourceMap) {
+        if (sourceMap == null) {
+            return null;
+        }
+
+        return sourceMap.entrySet().stream()
+            .collect(HashMap::new,
+                (existing, entry) -> existing.put(Symbol.valueOf(entry.getKey()), entry.getValue()),
+                (HashMap::putAll));
+    }
+
     private static Modified toProtonJModified(DeliveryOutcome outcome) {
         final Modified modified = new Modified();
 
@@ -572,24 +590,6 @@ final class MessageUtils {
         for (Map.Entry<Symbol, Object> entry : sourceMap.entrySet()) {
             targetMap.put(entry.getKey().toString(), entry.getValue());
         }
-    }
-
-    /**
-     * Converts a map from it's string keys to use {@link Symbol}.
-     *
-     * @param sourceMap Source map.
-     *
-     * @return A map with corresponding keys as symbols.
-     */
-    private static Map<Symbol, Object> convert(Map<String, Object> sourceMap) {
-        if (sourceMap == null) {
-            return null;
-        }
-
-        return sourceMap.entrySet().stream()
-            .collect(HashMap::new,
-                (existing, entry) -> existing.put(Symbol.valueOf(entry.getKey()), entry.getValue()),
-                (HashMap::putAll));
     }
 
     /**
