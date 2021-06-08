@@ -1,6 +1,5 @@
 package com.azure.core.amqp;
 
-import com.azure.core.amqp.implementation.ClientConstants;
 import com.azure.core.credential.AccessToken;
 import com.azure.core.credential.TokenCredential;
 import com.azure.core.credential.TokenRequestContext;
@@ -38,21 +37,6 @@ class CbsTokenCredential implements TokenCredential {
     private final Duration tokenValidity;
     private final SecretKeySpec secretKeySpec;
     private final String sharedAccessSignature;
-
-    /**
-     * Creates an instance that authorizes using the {@code policyName} and {@code sharedAccessKey}.
-     *
-     * @param policyName Name of the shared access key policy.
-     * @param sharedAccessKey Value of the shared access key.
-     * @throws IllegalArgumentException if {@code policyName}, {@code sharedAccessKey} is an empty string. If the
-     *     {@code sharedAccessKey} is an invalid value for the hashing algorithm.
-     * @throws NullPointerException if {@code policyName} or {@code sharedAccessKey} is null.
-     * @throws UnsupportedOperationException If the hashing algorithm cannot be instantiated, which is used to generate
-     *     the shared access signatures.
-     */
-    public CbsTokenCredential(String policyName, String sharedAccessKey) {
-        this(policyName, sharedAccessKey, ClientConstants.TOKEN_VALIDITY);
-    }
 
     /**
      * Creates an instance that authorizes using the {@code policyName} and {@code sharedAccessKey}. The authorization
