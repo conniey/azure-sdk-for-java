@@ -149,6 +149,12 @@ class AmqpReceiveLinkProcessorTest {
         final int backpressure = 15;
         // Because one message was emitted.
         final int expected = backpressure - 1;
+
+        when(link1.getCredits()).thenReturn(Flux.create(sink -> {
+            sink.next(1);
+            sink.next(0);
+        }));
+
         AmqpReceiveLinkProcessor processor = Flux.<AmqpReceiveLink>create(sink -> sink.next(link1))
             .subscribeWith(linkProcessor);
 
@@ -169,9 +175,10 @@ class AmqpReceiveLinkProcessorTest {
     void respectsBackpressureLessThanMinimum() {
         // Arrange
         final int backpressure = -1;
+        when(link1.getCredits()).thenReturn(Flux.create(sink -> sink.next(1)));
+
         AmqpReceiveLinkProcessor processor = Flux.<AmqpReceiveLink>create(sink -> sink.next(link1))
             .subscribeWith(linkProcessor);
-        when(link1.getCredits()).thenReturn(Flux.create(sink -> sink.next(1)));
 
         // Act
         processor.subscribe(
@@ -211,11 +218,9 @@ class AmqpReceiveLinkProcessorTest {
     void newLinkOnClose() {
         // Arrange
         final AmqpReceiveLink[] connections = new AmqpReceiveLink[]{link1, link2, link3};
-
         final AmqpAnnotatedMessage message3 = mock(AmqpAnnotatedMessage.class);
         final AmqpAnnotatedMessage message4 = mock(AmqpAnnotatedMessage.class);
 
-        final AmqpReceiveLinkProcessor processor = createSink(connections).subscribeWith(linkProcessor);
         final TestPublisher<AmqpEndpointState> connection2Endpoints = TestPublisher.createCold();
 
         when(link2.getEndpointStates()).thenReturn(connection2Endpoints.flux());
@@ -232,6 +237,8 @@ class AmqpReceiveLinkProcessorTest {
         when(link1.getCredits()).thenReturn(Flux.create(sink -> sink.next(1)));
         when(link2.getCredits()).thenReturn(Flux.create(sink -> sink.next(1)));
         when(link3.getCredits()).thenReturn(Flux.create(sink -> sink.next(1)));
+
+        final AmqpReceiveLinkProcessor processor = createSink(connections).subscribeWith(linkProcessor);
 
         // Act & Assert
         StepVerifier.create(processor)
@@ -266,12 +273,16 @@ class AmqpReceiveLinkProcessorTest {
         // Arrange
         final AmqpReceiveLink[] connections = new AmqpReceiveLink[]{link1, link2};
 
-        final AmqpReceiveLinkProcessor processor = createSink(connections).subscribeWith(linkProcessor);
         final AmqpAnnotatedMessage message3 = mock(AmqpAnnotatedMessage.class);
+
+        when(link1.getCredits()).thenReturn(Flux.create(sink -> sink.next(1)));
 
         when(link2.getEndpointStates()).thenReturn(Flux.create(sink -> sink.next(AmqpEndpointState.ACTIVE)));
         when(link2.receive()).thenReturn(Flux.just(message2, message3));
         when(link2.addCredits(anyInt())).thenReturn(Mono.empty());
+        when(link2.getCredits()).thenReturn(Flux.create(sink -> sink.next(1)));
+
+        final AmqpReceiveLinkProcessor processor = createSink(connections).subscribeWith(linkProcessor);
 
         final AmqpException amqpException = new AmqpException(false, AmqpErrorCondition.ARGUMENT_ERROR, "Non"
             + "-retryable-error",
@@ -344,8 +355,6 @@ class AmqpReceiveLinkProcessorTest {
         // Arrange
         final AmqpReceiveLink[] connections = new AmqpReceiveLink[]{link1, link2};
 
-        final AmqpReceiveLinkProcessor processor = createSink(connections).subscribeWith(linkProcessor);
-
         final TestPublisher<AmqpEndpointState> link2StateProcessor = TestPublisher.createCold();
 
         when(parentConnection.isDisposed()).thenReturn(true);
@@ -353,6 +362,11 @@ class AmqpReceiveLinkProcessorTest {
         when(link2.getEndpointStates()).thenReturn(link2StateProcessor.flux());
         when(link2.receive()).thenReturn(Flux.never());
         when(link2.addCredits(anyInt())).thenReturn(Mono.empty());
+        when(link2.getCredits()).thenReturn(Flux.create(sink -> sink.next(10)));
+
+        when(link1.getCredits()).thenReturn(Flux.create(sink -> sink.next(10)));
+
+        final AmqpReceiveLinkProcessor processor = createSink(connections).subscribeWith(linkProcessor);
 
         // Act & Assert
         StepVerifier.create(processor)
@@ -384,8 +398,6 @@ class AmqpReceiveLinkProcessorTest {
     void stopsEmittingAfterBackPressure() {
         // Arrange
         final int backpressure = 5;
-        AmqpReceiveLinkProcessor processor = Flux.<AmqpReceiveLink>create(sink -> sink.next(link1))
-            .subscribeWith(linkProcessor);
 
         when(link1.getCredits()).thenReturn(Flux.create(sink -> {
             sink.next(0);
@@ -395,6 +407,9 @@ class AmqpReceiveLinkProcessorTest {
             sink.next(2);
             sink.next(1);
         }));
+
+        AmqpReceiveLinkProcessor processor = Flux.<AmqpReceiveLink>create(sink -> sink.next(link1))
+            .subscribeWith(linkProcessor);
 
         // Act & Assert
         StepVerifier.create(processor, backpressure)
@@ -412,9 +427,9 @@ class AmqpReceiveLinkProcessorTest {
     @Test
     void receivesUntilFirstLinkClosed() {
         // Arrange
-        AmqpReceiveLinkProcessor processor = Flux.just(link1).subscribeWith(linkProcessor);
-
         when(link1.getCredits()).thenReturn(Flux.create(sink -> sink.next(1)));
+
+        AmqpReceiveLinkProcessor processor = Flux.just(link1).subscribeWith(linkProcessor);
 
         // Act & Assert
         StepVerifier.create(processor)
@@ -439,9 +454,9 @@ class AmqpReceiveLinkProcessorTest {
     @Test
     void receivesFromFirstLink() {
         // Arrange
-        AmqpReceiveLinkProcessor processor = Flux.just(link1).subscribeWith(linkProcessor);
-
         when(link1.getCredits()).thenReturn(Flux.create(sink -> sink.next(1)));
+
+        AmqpReceiveLinkProcessor processor = Flux.just(link1).subscribeWith(linkProcessor);
 
         // Act & Assert
         StepVerifier.create(processor)
@@ -469,10 +484,10 @@ class AmqpReceiveLinkProcessorTest {
     @Test
     void backpressureRequestOnlyEmitsThatAmount() {
         // Arrange
+        when(link1.getCredits()).thenReturn(Flux.create(sink -> sink.next(1)));
+
         final int backpressure = 10;
         AmqpReceiveLinkProcessor processor = Flux.just(link1).subscribeWith(linkProcessor);
-
-        when(link1.getCredits()).thenReturn(Flux.create(sink -> sink.next(1)));
 
         // Act & Assert
         StepVerifier.create(processor, backpressure)

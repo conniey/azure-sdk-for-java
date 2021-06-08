@@ -43,9 +43,9 @@ import reactor.core.scheduler.Schedulers;
 import reactor.test.StepVerifier;
 import reactor.test.publisher.TestPublisher;
 
-import java.sql.Date;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Date;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -153,7 +153,7 @@ class EventHubConsumerAsyncClientTest {
     void teardown() throws Exception {
         testScheduler.dispose();
         Mockito.framework().clearInlineMocks();
-        Mockito.clearInvocations(amqpReceiveLink, connection, tokenCredential);
+        Mockito.clearInvocations(connection, tokenCredential);
         consumer.close();
 
         if (mockCloseable != null) {

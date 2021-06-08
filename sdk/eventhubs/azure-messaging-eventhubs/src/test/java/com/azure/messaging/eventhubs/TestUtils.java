@@ -123,12 +123,16 @@ public final class TestUtils {
         return message;
     }
 
-    static AmqpAnnotatedMessage getAnnotatedMessage(byte[] contents, Long sequenceNumber, Long offsetNumber, Date enqueuedTime) {
+    static AmqpAnnotatedMessage getAnnotatedMessage(byte[] contents, Long sequenceNumber, Long offsetNumber,
+        Date enqueuedTime) {
+
         final AmqpAnnotatedMessage message = new AmqpAnnotatedMessage(AmqpMessageBody.fromData(contents));
+
         message.getMessageAnnotations().put(OFFSET_ANNOTATION_NAME.getValue(), String.valueOf(offsetNumber));
         message.getMessageAnnotations().put(ENQUEUED_TIME_UTC_ANNOTATION_NAME.getValue(), enqueuedTime);
         message.getMessageAnnotations().put(SEQUENCE_NUMBER_ANNOTATION_NAME.getValue(), sequenceNumber);
         message.getMessageAnnotations().put(PARTITION_KEY_ANNOTATION_NAME.getValue(), PARTITION_KEY);
+
         return message;
     }
 

@@ -36,7 +36,6 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInfo;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
@@ -123,6 +122,7 @@ class EventHubProducerAsyncClientTest {
     private TracerProvider tracerProvider;
     private ConnectionOptions connectionOptions;
     private final Scheduler testScheduler = Schedulers.newElastic("test");
+    private AutoCloseable mockCloseable;
 
     @BeforeAll
     static void beforeAll() {
@@ -135,8 +135,8 @@ class EventHubProducerAsyncClientTest {
     }
 
     @BeforeEach
-    void setup(TestInfo testInfo) {
-        MockitoAnnotations.initMocks(this);
+    void setup() {
+        mockCloseable = MockitoAnnotations.openMocks(this);
 
         tracerProvider = new TracerProvider(Collections.emptyList());
         connectionOptions = new ConnectionOptions(HOSTNAME, tokenCredential,
@@ -162,13 +162,17 @@ class EventHubProducerAsyncClientTest {
     }
 
     @AfterEach
-    void teardown(TestInfo testInfo) {
+    void teardown() throws Exception {
         testScheduler.dispose();
         Mockito.framework().clearInlineMocks();
         Mockito.reset(sendLink);
         Mockito.reset(connection);
         singleMessageCaptor = null;
         messagesCaptor = null;
+
+        if (mockCloseable != null) {
+            mockCloseable.close();
+        }
     }
 
     /**
@@ -922,18 +926,21 @@ class EventHubProducerAsyncClientTest {
         when(connection.createSendLink(eq(EVENT_HUB_NAME), eq(EVENT_HUB_NAME), eq(retryOptions)))
             .thenReturn(Mono.just(sendLink));
         when(sendLink.send(anyList())).thenReturn(Mono.empty());
+        when(sendLink.getMaxMessageSizeInBytes()).thenReturn(Mono.just(1035L));
 
         final DirectProcessor<AmqpEndpointState> connectionState2 = DirectProcessor.create();
         when(connection2.getEndpointStates()).thenReturn(connectionState2);
         when(connection2.createSendLink(eq(EVENT_HUB_NAME), eq(EVENT_HUB_NAME), eq(retryOptions)))
             .thenReturn(Mono.just(sendLink2));
         when(sendLink2.send(any(AmqpAnnotatedMessage.class))).thenReturn(Mono.empty());
+        when(sendLink2.getMaxMessageSizeInBytes()).thenReturn(Mono.just(1035L));
 
         final DirectProcessor<AmqpEndpointState> connectionState3 = DirectProcessor.create();
         when(connection3.getEndpointStates()).thenReturn(connectionState3);
         when(connection3.createSendLink(eq(EVENT_HUB_NAME), eq(EVENT_HUB_NAME), eq(retryOptions)))
             .thenReturn(Mono.just(sendLink3));
         when(sendLink3.send(anyList())).thenReturn(Mono.empty());
+        when(sendLink3.getMaxMessageSizeInBytes()).thenReturn(Mono.just(1035L));
 
         // Act
         StepVerifier.create(producer.send(testData))
@@ -970,6 +977,7 @@ class EventHubProducerAsyncClientTest {
         EventHubAmqpConnection[] connections = new EventHubAmqpConnection[]{
             connection, connection2, connection3
         };
+
         connectionProcessor = Flux.<EventHubAmqpConnection>create(sink -> {
             final AtomicInteger count = new AtomicInteger();
             sink.onRequest(request -> {

@@ -38,7 +38,6 @@ import reactor.test.publisher.TestPublisher;
 import java.time.Duration;
 import java.util.Date;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
@@ -73,7 +72,6 @@ public class EventHubConsumerClientTest {
     private static final ExecutorService EXECUTOR_SERVICE = Executors.newFixedThreadPool(4);
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
 
-    private final String messageTrackingUUID = UUID.randomUUID().toString();
     private final TestPublisher<AmqpAnnotatedMessage> messageProcessor = TestPublisher.createCold();
     private final EventHubMessageSerializer messageSerializer = new EventHubMessageSerializer();
 
@@ -144,8 +142,10 @@ public class EventHubConsumerClientTest {
     public void teardown() throws Exception {
         Mockito.framework().clearInlineMocks();
         consumer.close();
-        verifyNoMoreInteractions(onClientClosed);
-        mockCloseable.close();
+
+        if (mockCloseable != null) {
+            mockCloseable.close();
+        }
     }
 
     @AfterAll
@@ -352,7 +352,7 @@ public class EventHubConsumerClientTest {
                 Date.from(ENQUEUED_TIME));
 
             message.getApplicationProperties().put(MESSAGE_POSITION_ID, Integer.valueOf(i).toString());
-            message.getDeliveryAnnotations().put(PARTITION_ID_HEADER, partitionId);
+            message.getMessageAnnotations().put(PARTITION_ID_HEADER, partitionId);
             publisher.next(message);
         }
     }
