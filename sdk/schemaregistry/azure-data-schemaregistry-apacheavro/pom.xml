@@ -160,8 +160,10 @@
               <testSourceDirectory>src/samples/resources/avro/</testSourceDirectory>
               <testOutputDirectory>${project.basedir}/src/samples/java/</testOutputDirectory>
               <testIncludes>
-                <testInclude>Person.avro</testInclude>
+                <testInclude>AvroUser.avro</testInclude>
                 <testInclude>HandOfCards.avro</testInclude>
+                <testInclude>Person.avro</testInclude>
+                <testInclude>Person2.avro</testInclude>
               </testIncludes>
               <stringType>String</stringType>
             </configuration>

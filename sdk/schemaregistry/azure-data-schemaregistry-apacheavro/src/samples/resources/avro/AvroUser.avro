@@ -1,0 +1,18 @@
+{
+  "namespace": "com.azure.data.schemaregistry.apacheavro.generatedtestsources",
+  "type": "record",
+  "name": "AvroUser",
+  "fields": [
+    {
+      "name": "amount",
+      "type": "int"
+    },
+    {
+      "name": "time",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      }
+    }
+  ]
+}
