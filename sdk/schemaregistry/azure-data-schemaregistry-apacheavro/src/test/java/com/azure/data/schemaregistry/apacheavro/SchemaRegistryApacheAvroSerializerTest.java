@@ -18,6 +18,7 @@ import com.azure.core.util.serializer.SerializerEncoding;
 import com.azure.core.util.serializer.TypeReference;
 import com.azure.data.schemaregistry.SchemaRegistryAsyncClient;
 import com.azure.data.schemaregistry.SchemaRegistryClientBuilder;
+import com.azure.data.schemaregistry.apacheavro.generatedtestsources.AvroUser;
 import com.azure.data.schemaregistry.apacheavro.generatedtestsources.Person;
 import com.azure.data.schemaregistry.apacheavro.generatedtestsources.Person2;
 import com.azure.data.schemaregistry.apacheavro.generatedtestsources.PlayingCard;
@@ -48,7 +49,16 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.format.SignStyle;
+import java.time.temporal.ChronoField;
+import java.time.temporal.TemporalAccessor;
+import java.util.Arrays;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
@@ -426,6 +436,51 @@ public class SchemaRegistryApacheAvroSerializerTest {
         StepVerifier.create(serializer.serializeAsync(playingCard, typeReference))
             .expectError(IllegalStateException.class)
             .verify();
+    }
+
+    @Test
+    public void parsesLogicalDateType() {
+        // Arrange
+        final AvroSerializer avroSerializer = new AvroSerializer(false, ENCODER_FACTORY, DECODER_FACTORY);
+        final SerializerOptions serializerOptions = new SerializerOptions("test-schema-group", true,
+            MOCK_CACHE_SIZE);
+        final SchemaRegistryApacheAvroSerializer serializer = new SchemaRegistryApacheAvroSerializer(
+            client, avroSerializer, serializerOptions);
+        final TypeReference<MessageContent> typeReference = TypeReference.createInstance(MessageContent.class);
+
+        // "Thu Nov 05 275760 11:38:05 GMT-0800 (PST)"
+        final String date = "275760-11-05T19:38:05Z";
+        final DateTimeFormatter dateTimeFormatter = new DateTimeFormatterBuilder()
+            .appendValue(ChronoField.YEAR_OF_ERA, 4, 6, SignStyle.NORMAL)
+            .appendLiteral('-')
+            .appendValue(ChronoField.MONTH_OF_YEAR, 2)
+            .appendLiteral('-')
+            .appendValue(ChronoField.DAY_OF_MONTH, 2)
+            .appendLiteral('T')
+            .appendValue(ChronoField.HOUR_OF_DAY, 2)
+            .appendLiteral(':')
+            .appendValue(ChronoField.MINUTE_OF_HOUR, 2)
+            .appendLiteral(':')
+            .appendValue(ChronoField.SECOND_OF_MINUTE, 2)
+            .appendZoneId()
+            .toFormatter(Locale.ROOT);
+        final TemporalAccessor parsed = dateTimeFormatter.parse(date);
+
+        final Instant instant = Instant.from(parsed);
+        final AvroUser avroUser = AvroUser.newBuilder().setAmount(10).setTime(instant).build();
+
+        // Act & Assert
+        final byte[] serialized = avroSerializer.serialize(avroUser, "foo-bar");
+
+        System.out.println("Serialized bytes: " + Arrays.toString(serialized));
+
+        final AvroUser deserialized = avroSerializer.deserialize(ByteBuffer.wrap(serialized),
+            AvroUser.getClassSchema(),
+            TypeReference.createInstance(AvroUser.class));
+
+        assertEquals(avroUser.getAmount(), deserialized.getAmount());
+        assertNotNull(deserialized.getTime());
+        assertEquals(instant, deserialized.getTime());
     }
 
     /**
