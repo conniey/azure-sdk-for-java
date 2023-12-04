@@ -120,4 +120,11 @@ public class ConsumeEvents {
             consumer.close();
         }
     }
+
+    private static void test() {
+
+        EventHubClient eventHubClient = new EventHubClientBuilder()
+            .disableTls()
+            .buildClient();
+    }
 }

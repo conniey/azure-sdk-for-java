@@ -1217,4 +1217,8 @@ public class EventHubClientBuilder implements
                     .logThrowableAsError(new IllegalArgumentException("Transport Type is not supported: " + transport));
         }
     }
+
+    public EventHubClientBuilder disableTls() {
+        return this;
+    }
 }
