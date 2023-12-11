@@ -56,7 +56,7 @@ class EventHubPartitionAsyncConsumer implements AutoCloseable {
         this.trackLastEnqueuedEventProperties = trackLastEnqueuedEventProperties;
 
         if (trackLastEnqueuedEventProperties) {
-            lastEnqueuedEventProperties.set(new LastEnqueuedEventProperties(null, null, null, null));
+            lastEnqueuedEventProperties.set(new LastEnqueuedEventProperties(null, null, null, null, null));
         }
 
         currentEventPosition.set(() -> {
@@ -130,7 +130,9 @@ class EventHubPartitionAsyncConsumer implements AutoCloseable {
             if (enqueuedEventProperties != null) {
                 final LastEnqueuedEventProperties updated = new LastEnqueuedEventProperties(
                     enqueuedEventProperties.getSequenceNumber(), enqueuedEventProperties.getOffset(),
-                    enqueuedEventProperties.getEnqueuedTime(), enqueuedEventProperties.getRetrievalTime());
+                    enqueuedEventProperties.getEnqueuedTime(), enqueuedEventProperties.getRetrievalTime(),
+                    enqueuedEventProperties.getReplicationSegment());
+
                 lastEnqueuedEventProperties.set(updated);
             }
         }
