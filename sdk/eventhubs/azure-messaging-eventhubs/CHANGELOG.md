@@ -4,6 +4,12 @@
 
 ### Features Added
 
+- Added support geo-replication feature.
+- Added `Checkpoint.getReplicationSegment()`.
+- Added `getBeginningReplicationSegment()` and `getLastEnqueuedReplicationSegment()` to `PartitionProperties`.
+- Added `LastEnqueuedEventProperties.getReplicationSegment()`.
+- Added overloads to `EventPosition.fromSequenceNumber` that takes replication segment.
+
 ### Breaking Changes
 
 ### Bugs Fixed
