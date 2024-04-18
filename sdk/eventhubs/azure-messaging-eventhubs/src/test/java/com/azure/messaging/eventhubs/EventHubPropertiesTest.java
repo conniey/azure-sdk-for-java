@@ -20,13 +20,16 @@ public class EventHubPropertiesTest {
         final String name = "Some-event-hub-name";
         final Instant instant = Instant.ofEpochSecond(145620);
         final String[] partitionIds = new String[]{"one-partition", "two-partition", "three-partition"};
+        final Integer geoReplicationFactor = 10;
 
         // Act
-        final EventHubProperties eventHubProperties = new EventHubProperties(name, instant, partitionIds);
+        final EventHubProperties eventHubProperties = new EventHubProperties(name, instant, partitionIds, geoReplicationFactor);
 
         // Assert
         Assertions.assertEquals(name, eventHubProperties.getName());
         Assertions.assertEquals(instant, eventHubProperties.getCreatedAt());
+        Assertions.assertEquals(geoReplicationFactor, eventHubProperties.getGeoReplicationFactor());
+
         Assertions.assertEquals(partitionIds.length, eventHubProperties.getPartitionIds().stream().count());
 
         final Set<String> actual = eventHubProperties.getPartitionIds().stream().collect(Collectors.toSet());
@@ -45,7 +48,7 @@ public class EventHubPropertiesTest {
         final Instant instant = Instant.ofEpochSecond(145620);
 
         // Act & Assert
-        Assertions.assertThrows(NullPointerException.class, () -> new EventHubProperties(name, instant, null));
+        Assertions.assertThrows(NullPointerException.class, () -> new EventHubProperties(name, instant, null, 10));
     }
 
     /**
@@ -58,7 +61,7 @@ public class EventHubPropertiesTest {
         final String[] partitionIds = new String[]{"one-partition", "two-partition", "three-partition"};
 
         // Act & Assert
-        Assertions.assertThrows(NullPointerException.class, () -> new EventHubProperties(name, null, partitionIds));
+        Assertions.assertThrows(NullPointerException.class, () -> new EventHubProperties(name, null, partitionIds, 15));
     }
 
     /**
@@ -70,7 +73,6 @@ public class EventHubPropertiesTest {
         final String[] partitionIds = new String[]{"one-partition", "two-partition", "three-partition"};
 
         // Act & Assert
-        Assertions.assertThrows(NullPointerException.class, () -> new EventHubProperties(null, instant, partitionIds));
+        Assertions.assertThrows(NullPointerException.class, () -> new EventHubProperties(null, instant, partitionIds, 10));
     }
-
 }

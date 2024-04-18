@@ -23,6 +23,7 @@ public final class EventHubProperties {
     private final String name;
     private final Instant createdAt;
     private final IterableStream<String> partitionIds;
+    private final Integer geoReplicationFactor;
 
     /**
      * Creates an instance of {@link EventHubProperties}.
@@ -30,14 +31,17 @@ public final class EventHubProperties {
      * @param name Name of the Event Hub.
      * @param createdAt Datetime the Event Hub was created, in UTC.
      * @param partitionIds The partitions ids in the Event Hub.
+     * @param geoReplicationFactor Number of times a namespace has been replicated (due to fail overs). {@code null} if
+     * geo-disaster recovery fail over is not enabled.
      *
      * @throws NullPointerException if {@code name}, {@code createdAt}, or {@code partitionIds} is {@code null}.
      */
-    EventHubProperties(final String name, final Instant createdAt, final String[] partitionIds) {
+    EventHubProperties(final String name, final Instant createdAt, final String[] partitionIds, final Integer geoReplicationFactor) {
         this.name = Objects.requireNonNull(name, "'name' cannot be null.");
         this.createdAt = Objects.requireNonNull(createdAt, "'createdAt' cannot be null.");
         this.partitionIds = new IterableStream<>(Arrays.asList(
             Objects.requireNonNull(partitionIds, "'partitionIds' cannot be null.")));
+        this.geoReplicationFactor = geoReplicationFactor;
     }
 
     /**
@@ -65,5 +69,15 @@ public final class EventHubProperties {
      */
     public IterableStream<String> getPartitionIds() {
         return partitionIds;
+    }
+
+    /**
+     * Gets the geo-replication factor.
+     *
+     * @return The geo-replication factor for the namespace. {@code null} if geo-disaster recovery fail over is not
+     * enabled.
+     */
+    Integer getGeoReplicationFactor() {
+        return geoReplicationFactor;
     }
 }

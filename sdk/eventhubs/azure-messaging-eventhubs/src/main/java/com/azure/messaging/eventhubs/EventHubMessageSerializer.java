@@ -252,7 +252,8 @@ class EventHubMessageSerializer implements MessageSerializer {
         return new EventHubProperties(
             getValue(amqpBody, ManagementChannel.MANAGEMENT_ENTITY_NAME_KEY, String.class),
             getDate(amqpBody, ManagementChannel.MANAGEMENT_RESULT_CREATED_AT),
-            getValue(amqpBody, ManagementChannel.MANAGEMENT_RESULT_PARTITION_IDS, String[].class));
+            getValue(amqpBody, ManagementChannel.MANAGEMENT_RESULT_PARTITION_IDS, String[].class),
+            getValue(amqpBody, ManagementChannel.MANAGEMENT_GEO_REPLICATION_FACTOR, Integer.class, false));
     }
 
     private PartitionProperties toPartitionProperties(Map<?, ?> amqpBody) {

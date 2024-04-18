@@ -549,12 +549,13 @@ class EventHubConsumerAsyncClientTest {
         String id2 = "partition-2";
         String id3 = "partition-3";
         String[] partitions = new String[]{PARTITION_ID, id2, id3};
+        EventHubProperties eventHubProperties = new EventHubProperties(EVENT_HUB_NAME, Instant.EPOCH, partitions, 10);
+
 
         // Set-up management node returns.
         EventHubManagementNode managementNode = mock(EventHubManagementNode.class);
         when(connection1.getManagementNode()).thenReturn(Mono.just(managementNode));
-        when(managementNode.getEventHubProperties())
-            .thenReturn(Mono.just(new EventHubProperties(EVENT_HUB_NAME, Instant.EPOCH, partitions)));
+        when(managementNode.getEventHubProperties()).thenReturn(Mono.just(eventHubProperties));
 
         EventHubConsumerAsyncClient asyncClient = new EventHubConsumerAsyncClient(HOSTNAME, EVENT_HUB_NAME,
             eventHubConnection, messageSerializer, CONSUMER_GROUP, PREFETCH, false, onClientClosed, CLIENT_IDENTIFIER,
@@ -625,12 +626,12 @@ class EventHubConsumerAsyncClientTest {
         String id2 = "partition-2";
         String id3 = "partition-3";
         String[] partitions = new String[]{PARTITION_ID, id2, id3};
+        EventHubProperties eventHubProperties = new EventHubProperties(EVENT_HUB_NAME, Instant.EPOCH, partitions, 10);
 
         // Set-up management node returns.
         EventHubManagementNode managementNode = mock(EventHubManagementNode.class);
         when(connection1.getManagementNode()).thenReturn(Mono.just(managementNode));
-        when(managementNode.getEventHubProperties())
-            .thenReturn(Mono.just(new EventHubProperties(EVENT_HUB_NAME, Instant.EPOCH, partitions)));
+        when(managementNode.getEventHubProperties()).thenReturn(Mono.just(eventHubProperties));
 
         EventHubConsumerAsyncClient asyncClient = new EventHubConsumerAsyncClient(HOSTNAME, EVENT_HUB_NAME,
             eventHubConnection, messageSerializer, CONSUMER_GROUP, PREFETCH, false, onClientClosed, CLIENT_IDENTIFIER,
@@ -861,7 +862,7 @@ class EventHubConsumerAsyncClientTest {
             connectionProcessor, messageSerializer, CONSUMER_GROUP, PREFETCH, false, onClientClosed, CLIENT_IDENTIFIER,
             instrumentation);
 
-        EventHubProperties ehProperties = new EventHubProperties(EVENT_HUB_NAME, Instant.now(), new String[]{"0"});
+        EventHubProperties ehProperties = new EventHubProperties(EVENT_HUB_NAME, Instant.now(), new String[]{"0"}, 15);
         PartitionProperties partitionProperties = new PartitionProperties(EVENT_HUB_NAME, "0",
             1L, 2L, OffsetDateTime.now().toString(), Instant.now(), false, 10, null);
         EventHubManagementNode managementNode = mock(EventHubManagementNode.class);
@@ -915,9 +916,9 @@ class EventHubConsumerAsyncClientTest {
             connectionProcessor, messageSerializer, CONSUMER_GROUP, PREFETCH, false, onClientClosed, CLIENT_IDENTIFIER,
             DEFAULT_INSTRUMENTATION);
 
-        final EventHubProperties ehProperties = new EventHubProperties(EVENT_HUB_NAME, Instant.now(), new String[]{"0"});
+        final EventHubProperties ehProperties = new EventHubProperties(EVENT_HUB_NAME, Instant.now(), new String[]{"0"}, 10);
         PartitionProperties partitionProperties = new PartitionProperties(EVENT_HUB_NAME, "0",
-            1L, 2L, OffsetDateTime.now().toString(), Instant.now(), false);
+            1L, 2L, OffsetDateTime.now().toString(), Instant.now(), false, 8, 10);
         EventHubManagementNode managementNode = mock(EventHubManagementNode.class);
 
         AtomicInteger tryCount = new AtomicInteger();

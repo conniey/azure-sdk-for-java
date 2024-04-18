@@ -41,6 +41,7 @@ public class ManagementChannel implements EventHubManagementNode {
     public static final String MANAGEMENT_PARTITION_NAME_KEY = "partition";
     public static final String MANAGEMENT_RESULT_PARTITION_IDS = "partition_ids";
     public static final String MANAGEMENT_RESULT_CREATED_AT = "created_at";
+    public static final String MANAGEMENT_GEO_REPLICATION_FACTOR = "georeplication_factor";
     public static final String MANAGEMENT_RESULT_BEGIN_SEQUENCE_NUMBER = "begin_sequence_number";
     public static final String MANAGEMENT_RESULT_LAST_ENQUEUED_SEQUENCE_NUMBER = "last_enqueued_sequence_number";
     public static final String MANAGEMENT_RESULT_LAST_ENQUEUED_OFFSET = "last_enqueued_offset";

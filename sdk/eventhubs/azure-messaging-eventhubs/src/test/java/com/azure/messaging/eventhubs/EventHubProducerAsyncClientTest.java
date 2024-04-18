@@ -459,7 +459,7 @@ class EventHubProducerAsyncClientTest {
             connectionProcessor, retryOptions, messageSerializer, Schedulers.parallel(),
             false, onClientClosed, CLIENT_IDENTIFIER, instrumentation);
 
-        EventHubProperties ehProperties = new EventHubProperties(EVENT_HUB_NAME, Instant.now(), new String[]{"0"});
+        EventHubProperties ehProperties = new EventHubProperties(EVENT_HUB_NAME, Instant.now(), new String[]{"0"}, null);
         PartitionProperties partitionProperties = new PartitionProperties(EVENT_HUB_NAME, "0",
             1L, 2L, OffsetDateTime.now().toString(), Instant.now(), false, null, null);
         EventHubManagementNode managementNode = mock(EventHubManagementNode.class);
@@ -516,9 +516,9 @@ class EventHubProducerAsyncClientTest {
             connectionProcessor, lowDelayOptions, messageSerializer, Schedulers.parallel(),
             false, onClientClosed, CLIENT_IDENTIFIER, DEFAULT_INSTRUMENTATION);
 
-        final EventHubProperties ehProperties = new EventHubProperties(EVENT_HUB_NAME, Instant.now(), new String[]{"0"});
+        final EventHubProperties ehProperties = new EventHubProperties(EVENT_HUB_NAME, Instant.now(), new String[]{"0"}, null);
         PartitionProperties partitionProperties = new PartitionProperties(EVENT_HUB_NAME, "0",
-            1L, 2L, OffsetDateTime.now().toString(), Instant.now(), false);
+            1L, 2L, OffsetDateTime.now().toString(), Instant.now(), false, null, null);
         EventHubManagementNode managementNode = mock(EventHubManagementNode.class);
 
         AtomicInteger tryCount = new AtomicInteger();
