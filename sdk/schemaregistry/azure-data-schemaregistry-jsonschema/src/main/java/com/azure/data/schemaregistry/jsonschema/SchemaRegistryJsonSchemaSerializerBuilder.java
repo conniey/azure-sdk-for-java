@@ -3,13 +3,17 @@
 
 package com.azure.data.schemaregistry.jsonschema;
 
+import com.azure.core.models.MessageContent;
 import com.azure.core.util.CoreUtils;
 import com.azure.core.util.logging.ClientLogger;
 import com.azure.core.util.serializer.JsonSerializer;
 import com.azure.core.util.serializer.JsonSerializerProviders;
+import com.azure.core.util.serializer.TypeReference;
 import com.azure.data.schemaregistry.SchemaRegistryAsyncClient;
+import com.azure.data.schemaregistry.SchemaRegistryClient;
 
 import java.util.Objects;
+import java.util.function.Function;
 
 /**
  * Class that creates {@link SchemaRegistryJsonSchemaSerializer} which interacts with Schema Registry.
@@ -22,8 +26,9 @@ public final class SchemaRegistryJsonSchemaSerializerBuilder {
     private Boolean autoRegisterSchemas;
     private JsonSchemaGenerator jsonSchemaGenerator;
     private String schemaGroup;
-    private SchemaRegistryAsyncClient schemaRegistryAsyncClient;
     private JsonSerializer jsonSerializer;
+    private SchemaRegistryAsyncClient schemaRegistryAsyncClient;
+    private SchemaRegistryClient schemaRegistryClient;
 
     /**
      * <p>If true, the serializer will register schemas against Azure Schema Registry service under the specified
@@ -47,7 +52,6 @@ public final class SchemaRegistryJsonSchemaSerializerBuilder {
 
     /**
      * Specifies schema group for interacting with Azure Schema Registry service.
-     *
      * If auto-registering schemas, schema will be stored under this group. If not auto-registering, serializer will
      * request schema ID for matching data schema under specified group.
      *
@@ -74,6 +78,13 @@ public final class SchemaRegistryJsonSchemaSerializerBuilder {
 
     /**
      * The {@link SchemaRegistryAsyncClient} to use to interact with the Schema Registry service.
+     * {@link SchemaRegistryAsyncClient} is used when asynchronous calls to {@link SchemaRegistryJsonSchemaSerializer}
+     * are made such as:
+     * <ul>
+     *     <li>{@link SchemaRegistryJsonSchemaSerializer#serializeAsync(Object, TypeReference)}</li>
+     *     <li>{@link SchemaRegistryJsonSchemaSerializer#serializeAsync(Object, TypeReference, Function)}</li>
+     *     <li>{@link SchemaRegistryJsonSchemaSerializer#deserializeAsync(MessageContent, TypeReference)}</li>
+     * </ul>
      *
      * @param schemaRegistryAsyncClient The {@link SchemaRegistryAsyncClient}.
      *
@@ -82,6 +93,26 @@ public final class SchemaRegistryJsonSchemaSerializerBuilder {
     public SchemaRegistryJsonSchemaSerializerBuilder schemaRegistryClient(
         SchemaRegistryAsyncClient schemaRegistryAsyncClient) {
         this.schemaRegistryAsyncClient = schemaRegistryAsyncClient;
+        return this;
+    }
+
+    /**
+     * The {@link SchemaRegistryClient} to use to interact with the Schema Registry service.
+     * {@link SchemaRegistryClient} is used when synchronous calls to {@link SchemaRegistryJsonSchemaSerializer} are
+     * made such as:
+     * <ul>
+     *     <li>{@link SchemaRegistryJsonSchemaSerializer#serialize(Object, TypeReference)}</li>
+     *     <li>{@link SchemaRegistryJsonSchemaSerializer#serialize(Object, TypeReference, Function)}</li>
+     *     <li>{@link SchemaRegistryJsonSchemaSerializer#deserialize(MessageContent, TypeReference)}</li>
+     * </ul>
+     *
+     * @param schemaRegistryClient The {@link SchemaRegistryClient}.
+     *
+     * @return updated {@link SchemaRegistryJsonSchemaSerializerBuilder} instance.
+     */
+    public SchemaRegistryJsonSchemaSerializerBuilder schemaRegistryClient(
+        SchemaRegistryClient schemaRegistryClient) {
+        this.schemaRegistryClient = schemaRegistryClient;
         return this;
     }
 
