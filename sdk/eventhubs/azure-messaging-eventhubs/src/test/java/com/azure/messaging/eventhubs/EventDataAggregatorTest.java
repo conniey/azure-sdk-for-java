@@ -5,15 +5,19 @@ package com.azure.messaging.eventhubs;
 
 import com.azure.core.amqp.exception.AmqpErrorCondition;
 import com.azure.core.amqp.exception.AmqpException;
+import com.azure.core.test.utils.metrics.TestGauge;
 import com.azure.core.util.logging.ClientLogger;
 import com.azure.core.util.logging.LogLevel;
 import com.azure.messaging.eventhubs.EventHubBufferedProducerAsyncClient.BufferedProducerClientOptions;
+import jdk.jfr.Event;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.reactivestreams.Subscription;
+import reactor.core.CoreSubscriber;
 import reactor.test.StepVerifier;
 import reactor.test.publisher.TestPublisher;
 
@@ -28,7 +32,7 @@ import java.util.function.Supplier;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 public class EventDataAggregatorTest {
     private static final ClientLogger LOGGER = new ClientLogger(EventDataAggregatorTest.class);
@@ -46,6 +50,9 @@ public class EventDataAggregatorTest {
 
     @Mock
     private EventDataBatch batch3;
+
+    @Mock
+    private CoreSubscriber<EventDataBatch> downstreamSubscriber;
 
     private final EventData event1 = new EventData("foo");
     private final EventData event2 = new EventData("bar");
@@ -286,6 +293,44 @@ public class EventDataAggregatorTest {
         publisher.assertMaxRequested(request);
     }
 
+    @Test
+    public void enqueuesEvent() {
+        // Arrange
+        final String namespace = "test-namespace.com";
+        final String partitionId = "test-partition-id";
+
+        final Subscription subscription = mock(Subscription.class);
+        final List<EventData> batchEvents = new ArrayList<>();
+
+        setupBatchMock(batch, batchEvents, event1, event2);
+
+        final Duration waitTime = Duration.ofSeconds(5);
+        final BufferedProducerClientOptions options = new BufferedProducerClientOptions();
+        options.setMaxWaitTime(waitTime);
+
+        final AtomicBoolean first = new AtomicBoolean();
+        final Supplier<EventDataBatch> supplier = () -> {
+            if (first.compareAndSet(false, true)) {
+                return batch;
+            } else {
+                return batch2;
+            }
+        };
+
+        final EventDataAggregator.EventDataAggregatorMain aggregator = new EventDataAggregator.EventDataAggregatorMain(
+            downstreamSubscriber, namespace, options, supplier, partitionId, LOGGER);
+
+        // Act & Arrange
+        aggregator.onSubscribe(subscription);
+        verify(subscription, times(1)).request(1L);
+
+        aggregator.onNext(event1);
+        verify(downstreamSubscriber, times(0)).onNext(any(EventDataBatch.class));
+
+        aggregator.onNext(event3);
+        verify(downstreamSubscriber, times(1)).onNext(batch);
+    }
+
     /**
      * Helper method to set up mocked {@link EventDataBatch} to accept the given events in {@code resultSet}.
      *
@@ -306,9 +351,7 @@ public class EventDataAggregatorTest {
 
             return matches;
         });
-        when(batch.getEvents()).thenAnswer(invocation -> {
-            return resultSet;
-        });
+        when(batch.getEvents()).thenAnswer(invocation -> resultSet);
         when(batch.getCount()).thenAnswer(invocation -> resultSet.size());
     }
 }

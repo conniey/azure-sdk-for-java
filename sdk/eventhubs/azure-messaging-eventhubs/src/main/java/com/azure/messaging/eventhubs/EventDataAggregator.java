@@ -77,7 +77,8 @@ class EventDataAggregator extends FluxOperator<EventData, EventDataBatch> {
     }
 
     /**
-     * Main implementation class for subscribing to the upstream source and publishing events downstream.
+     * Main implementation class for subscribing to the upstream source and publishing {@link EventDataBatch}
+     * downstream.
      */
     static class EventDataAggregatorMain implements Subscription, CoreSubscriber<EventData> {
         /**
@@ -87,6 +88,10 @@ class EventDataAggregator extends FluxOperator<EventData, EventDataBatch> {
         private static final AtomicLongFieldUpdater<EventDataAggregatorMain> REQUESTED =
             AtomicLongFieldUpdater.newUpdater(EventDataAggregatorMain.class, "requested");
 
+        /**
+         * Sink that keeps track of when events are enqueued.  Used to reset the timer that signals publishing events
+         * downstream when options.getMaxWaitTime() has elapsed.
+         */
         private final Sinks.Many<Long> eventSink;
         private final Disposable disposable;
 
@@ -217,7 +222,7 @@ class EventDataAggregator extends FluxOperator<EventData, EventDataBatch> {
                 publishDownstream();
                 return;
             } else if (eventData == null) {
-                // EventData will be null in the case when options.maxWaitTime() has elapsed  and we want to push the
+                // EventData will be null in the case when options.maxWaitTime() has elapsed and we want to push the
                 // batch downstream.
                 return;
             }

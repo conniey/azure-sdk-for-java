@@ -465,8 +465,8 @@ public final class EventHubBufferedProducerAsyncClient implements Closeable {
         final Queue<EventData> eventQueue = queueSupplier.get();
         final Sinks.Many<EventData> eventSink = Sinks.many().unicast().onBackpressureBuffer(eventQueue);
 
-        return new EventHubBufferedPartitionProducer(client, partitionId, clientOptions, retryOptions,
-            eventSink, eventQueue, tracer);
+        return new EventHubBufferedPartitionProducer(client, partitionId, clientOptions, retryOptions, eventSink,
+            eventQueue, tracer);
     }
 
     /**
