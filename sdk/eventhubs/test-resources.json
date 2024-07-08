@@ -101,18 +101,6 @@
                     "Manage"
                 ]
             }
-        },
-        {
-            "type": "Microsoft.Authorization/roleAssignments",
-            "apiVersion": "[variables('authorizationApiVersion')]",
-            "name": "[guid(concat('eventHubsDataOwnerRoleId', variables('eventHubsNamespaceName')))]",
-            "dependsOn": [
-                "[resourceId('Microsoft.EventHub/namespaces', variables('eventHubsNamespaceName'))]"
-            ],
-            "properties": {
-                "roleDefinitionId": "[variables('eventHubsDataOwnerRoleId')]",
-                "principalId": "[parameters('testApplicationOid')]"
-            }
         }
     ],
     "outputs": {
@@ -123,14 +111,6 @@
         "AZURE_CLIENT_ID": {
             "type": "string",
             "value": "[parameters('testApplicationId')]"
-        },
-        "AZURE_CLIENT_SECRET": {
-            "type": "string",
-            "value": "[parameters('testApplicationSecret')]"
-        },
-        "AZURE_EVENTHUBS_CONNECTION_STRING": {
-            "type": "string",
-            "value": "[concat(listKeys(resourceId('Microsoft.EventHub/namespaces/authorizationRules', variables('eventHubsNamespaceName'), variables('eventHubsNamespaceKeyName')), variables('eventHubsApiVersion')).primaryConnectionString, ';EntityPath=', parameters('eventHubName'))]"
         },
         "AZURE_EVENTHUBS_EVENT_HUB_NAME": {
             "type": "string",
