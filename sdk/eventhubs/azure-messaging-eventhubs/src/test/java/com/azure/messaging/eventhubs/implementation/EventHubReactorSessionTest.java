@@ -150,11 +150,11 @@ public class EventHubReactorSessionTest {
     @Test
     public void getOffsetExpression() {
         // Arrange
-        final long offset = 2501L;
+        final String offset = "2501";
         final EventPosition eventPosition = EventPosition.fromOffset(offset);
 
         // -1 because replication segment is null.
-        final String expected = "amqp.annotation.x-opt-offset > '" + offset + "'";
+        final String expected = "amqp.annotation.x-opt-offset > '-1:2501'";
 
         // Act
         final String actual = EventHubReactorSession.getExpression(eventPosition);
@@ -164,26 +164,27 @@ public class EventHubReactorSessionTest {
     }
 
     public static Stream<Arguments> getExpression() {
-        final long position = 2501;
+        final String position = "2222";
+        final long sequenceNumber = 13L;
         final int replicationSegment = 19;
         final Instant enqueuedTime = Instant.ofEpochMilli(1705519331970L);
 
         return Stream.of(
-            Arguments.of(EventPosition.fromOffset(position), "amqp.annotation.x-opt-offset > '2501'"),
+            Arguments.of(EventPosition.fromOffset(position), "amqp.annotation.x-opt-offset > '-1:2222'"),
 
             Arguments.of(EventPosition.fromEnqueuedTime(enqueuedTime),
                 "amqp.annotation.x-opt-enqueued-time > '1705519331970'"),
 
             // -1 because replication segment is null.
-            Arguments.of(EventPosition.fromSequenceNumber(position),
+            Arguments.of(EventPosition.fromSequenceNumber(sequenceNumber),
                 "amqp.annotation.x-opt-sequence-number > '-1:2501'"),
-            Arguments.of(EventPosition.fromSequenceNumber(position, true),
+            Arguments.of(EventPosition.fromSequenceNumber(sequenceNumber, true),
                 "amqp.annotation.x-opt-sequence-number >= '-1:2501'"),
 
             // Passing in a replication segment.
-            Arguments.of(EventPosition.fromSequenceNumber(position, replicationSegment),
+            Arguments.of(EventPosition.fromSequenceNumber(sequenceNumber, replicationSegment),
                 "amqp.annotation.x-opt-sequence-number > '19:2501'"),
-            Arguments.of(EventPosition.fromSequenceNumber(position, replicationSegment, true),
+            Arguments.of(EventPosition.fromSequenceNumber(sequenceNumber, replicationSegment, true),
                 "amqp.annotation.x-opt-sequence-number >= '19:2501'")
         );
     }
