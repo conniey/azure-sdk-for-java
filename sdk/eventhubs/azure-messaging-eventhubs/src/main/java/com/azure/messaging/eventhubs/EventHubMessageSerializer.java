@@ -209,7 +209,7 @@ class EventHubMessageSerializer implements MessageSerializer {
         final Integer lastEnqueuedReplicationSegment = getValue(deliveryAnnotations,
             MANAGEMENT_RESULT_LAST_ENQUEUED_SEQUENCE_NUMBER_EPOCH, Integer.class, false);
 
-        return new LastEnqueuedEventProperties(lastSequenceNumber, Long.valueOf(lastEnqueuedOffset), lastEnqueuedTime,
+        return new LastEnqueuedEventProperties(lastSequenceNumber, lastEnqueuedOffset, lastEnqueuedTime,
             retrievalTime, lastEnqueuedReplicationSegment);
     }
 
@@ -234,7 +234,7 @@ class EventHubMessageSerializer implements MessageSerializer {
             ENQUEUED_TIME_UTC_ANNOTATION_NAME.getValue());
 
         final String partitionKey = (String) messageAnnotations.get(PARTITION_KEY_ANNOTATION_NAME.getValue());
-        final long offset = getAsLong(messageAnnotations, OFFSET_ANNOTATION_NAME.getValue());
+        final String offset = (String) messageAnnotations.get(OFFSET_ANNOTATION_NAME.getValue());
         final long sequenceNumber = getAsLong(messageAnnotations, SEQUENCE_NUMBER_ANNOTATION_NAME.getValue());
 
         // It is an optional value. Possible that there is no replication segment.

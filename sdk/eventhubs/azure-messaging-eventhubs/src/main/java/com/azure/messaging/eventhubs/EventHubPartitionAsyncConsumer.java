@@ -39,7 +39,7 @@ class EventHubPartitionAsyncConsumer implements AutoCloseable {
     private final Flux<PartitionEvent> emitterProcessor;
     private final EventPosition initialPosition;
 
-    private volatile Long currentOffset;
+    private volatile String currentOffset;
 
     EventHubPartitionAsyncConsumer(MessageFluxWrapper amqpReceiveLinkProcessor,
         MessageSerializer messageSerializer, String fullyQualifiedNamespace, String eventHubName, String consumerGroup,
@@ -60,7 +60,7 @@ class EventHubPartitionAsyncConsumer implements AutoCloseable {
         }
 
         currentEventPosition.set(() -> {
-            final Long offset = currentOffset;
+            final String offset = currentOffset;
             return offset == null
                 ? initialPosition
                 : EventPosition.fromOffset(offset);
@@ -70,7 +70,7 @@ class EventHubPartitionAsyncConsumer implements AutoCloseable {
             .map(this::onMessageReceived)
             .doOnNext(event -> {
                 // Keep track of the last position so if the link goes down, we don't start from the original location.
-                final Long offset = event.getData().getOffset();
+                final String offset = event.getData().getOffset();
                 if (offset != null) {
                     currentOffset = offset;
                 } else {
