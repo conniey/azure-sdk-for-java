@@ -408,7 +408,9 @@ public final class TestUtils {
         amqpAnnotatedMessage.getMessageAnnotations()
                 .put(AmqpMessageConstant.ENQUEUED_TIME_UTC_ANNOTATION_NAME.getValue(), enqueuedTime);
 
-        SystemProperties systemProperties = new SystemProperties(amqpAnnotatedMessage, offset, enqueuedTime, sequenceNumber, null, 1);
+        SystemProperties systemProperties = new SystemProperties(amqpAnnotatedMessage, String.valueOf(offset),
+            enqueuedTime, sequenceNumber, null, 1);
+
         return new EventData(amqpAnnotatedMessage, systemProperties, Context.NONE);
     }
 

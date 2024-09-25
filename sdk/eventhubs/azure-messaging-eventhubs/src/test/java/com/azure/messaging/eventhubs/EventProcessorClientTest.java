@@ -12,7 +12,7 @@ import com.azure.core.util.tracing.StartSpanOptions;
 import com.azure.core.util.tracing.Tracer;
 import com.azure.core.util.tracing.TracingLink;
 import com.azure.messaging.eventhubs.implementation.PartitionProcessor;
-import com.azure.messaging.eventhubs.implementation.instrumentation.*;
+import com.azure.messaging.eventhubs.implementation.instrumentation.OperationName;
 import com.azure.messaging.eventhubs.models.ErrorContext;
 import com.azure.messaging.eventhubs.models.EventBatchContext;
 import com.azure.messaging.eventhubs.models.EventContext;
@@ -58,8 +58,8 @@ import static com.azure.messaging.eventhubs.TestUtils.assertAllAttributes;
 import static com.azure.messaging.eventhubs.TestUtils.getSpanName;
 import static com.azure.messaging.eventhubs.implementation.instrumentation.InstrumentationUtils.DIAGNOSTIC_ID_KEY;
 import static com.azure.messaging.eventhubs.implementation.instrumentation.InstrumentationUtils.MESSAGING_EVENTHUBS_MESSAGE_ENQUEUED_TIME;
-import static com.azure.messaging.eventhubs.implementation.instrumentation.OperationName.PROCESS;
 import static com.azure.messaging.eventhubs.implementation.instrumentation.OperationName.CHECKPOINT;
+import static com.azure.messaging.eventhubs.implementation.instrumentation.OperationName.PROCESS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
@@ -154,8 +154,8 @@ public class EventProcessorClientTest {
 
         when(eventData1.getSequenceNumber()).thenReturn(1L);
         when(eventData2.getSequenceNumber()).thenReturn(2L);
-        when(eventData1.getOffset()).thenReturn(1L);
-        when(eventData2.getOffset()).thenReturn(100L);
+        when(eventData1.getOffset()).thenReturn("1L");
+        when(eventData2.getOffset()).thenReturn("100L");
 
         final SampleCheckpointStore checkpointStore = new SampleCheckpointStore();
         final TestPartitionProcessor testPartitionProcessor = new TestPartitionProcessor();
@@ -242,8 +242,8 @@ public class EventProcessorClientTest {
             .thenReturn(consumer1);
         when(eventHubAsyncClient.getIdentifier()).thenReturn("my-client-identifier");
         when(eventData1.getSequenceNumber()).thenReturn(1L);
-        when(eventData1.getOffset()).thenReturn(1L);
-        when(eventData1.getOffset()).thenReturn(100L);
+        when(eventData1.getOffset()).thenReturn("1L");
+        when(eventData1.getOffset()).thenReturn("100L");
         when(eventData1.getEnqueuedTime()).thenReturn(Instant.ofEpochSecond(1560639208));
 
         String diagnosticId = "00-08ee063508037b1719dddcbf248e30e2-1365c684eb25daed-01";
@@ -336,7 +336,7 @@ public class EventProcessorClientTest {
             .thenReturn(consumer1);
         when(eventHubAsyncClient.getIdentifier()).thenReturn("my-client-identifier");
         when(eventData1.getSequenceNumber()).thenReturn(1L);
-        when(eventData1.getOffset()).thenReturn(100L);
+        when(eventData1.getOffset()).thenReturn("100L");
         when(eventData1.getEnqueuedTime()).thenReturn(Instant.ofEpochSecond(1560639208));
         when(eventData2.getEnqueuedTime()).thenReturn(Instant.ofEpochSecond(1560639209));
 
@@ -447,7 +447,7 @@ public class EventProcessorClientTest {
             .thenReturn(consumer1);
         when(eventHubAsyncClient.getIdentifier()).thenReturn("my-client-identifier");
         when(eventData1.getSequenceNumber()).thenReturn(1L);
-        when(eventData1.getOffset()).thenReturn(100L);
+        when(eventData1.getOffset()).thenReturn("100L");
         when(eventData1.getEnqueuedTime()).thenReturn(Instant.ofEpochSecond(1560639208));
         when(eventData2.getEnqueuedTime()).thenReturn(Instant.ofEpochSecond(1560639209));
 
@@ -583,13 +583,13 @@ public class EventProcessorClientTest {
             .createConsumer(anyString(), anyInt(), eq(true)))
             .thenReturn(consumer1);
         when(eventData1.getSequenceNumber()).thenReturn(1L);
-        when(eventData1.getOffset()).thenReturn(1L);
+        when(eventData1.getOffset()).thenReturn("1L");
         when(eventData1.getEnqueuedTime()).thenReturn(Instant.ofEpochSecond(1560639208));
         when(eventData2.getSequenceNumber()).thenReturn(2L);
-        when(eventData2.getOffset()).thenReturn(100L);
+        when(eventData2.getOffset()).thenReturn("100L");
         when(eventData2.getEnqueuedTime()).thenReturn(Instant.ofEpochSecond(1560639208));
         when(eventData3.getSequenceNumber()).thenReturn(3L);
-        when(eventData3.getOffset()).thenReturn(150L);
+        when(eventData3.getOffset()).thenReturn("150L");
         when(eventData3.getEnqueuedTime()).thenReturn(Instant.ofEpochSecond(1560639208));
         final int numberOfEvents = 3;
 
@@ -686,18 +686,18 @@ public class EventProcessorClientTest {
                 .thenMany(Flux.just(getEvent(eventData1), getEvent(eventData2))));
         when(eventData1.getSequenceNumber()).thenReturn(1L);
         when(eventData2.getSequenceNumber()).thenReturn(2L);
-        when(eventData1.getOffset()).thenReturn(1L);
-        when(eventData2.getOffset()).thenReturn(100L);
+        when(eventData1.getOffset()).thenReturn("1L");
+        when(eventData2.getOffset()).thenReturn("100L");
 
         when(consumer2.receiveFromPartition(argThat(arg -> identifiers.remove(arg)), eq(position), any()))
             .thenReturn(Mono.fromRunnable(() -> count.countDown()).thenMany(Flux.just(getEvent(eventData3))));
         when(eventData3.getSequenceNumber()).thenReturn(1L);
-        when(eventData3.getOffset()).thenReturn(1L);
+        when(eventData3.getOffset()).thenReturn("1L");
 
         when(consumer3.receiveFromPartition(argThat(arg -> identifiers.remove(arg)), eq(position), any()))
             .thenReturn(Mono.fromRunnable(() -> count.countDown()).thenMany(Flux.just(getEvent(eventData4))));
         when(eventData4.getSequenceNumber()).thenReturn(1L);
-        when(eventData4.getOffset()).thenReturn(1L);
+        when(eventData4.getOffset()).thenReturn("1L");
 
         final SampleCheckpointStore checkpointStore = new SampleCheckpointStore();
 
@@ -759,9 +759,9 @@ public class EventProcessorClientTest {
         when(eventData1.getSequenceNumber()).thenReturn(1L);
         when(eventData2.getSequenceNumber()).thenReturn(2L);
         when(eventData3.getSequenceNumber()).thenReturn(3L);
-        when(eventData1.getOffset()).thenReturn(1L);
-        when(eventData2.getOffset()).thenReturn(100L);
-        when(eventData3.getOffset()).thenReturn(150L);
+        when(eventData1.getOffset()).thenReturn("1L");
+        when(eventData2.getOffset()).thenReturn("100L");
+        when(eventData3.getOffset()).thenReturn("150L");
 
         final SampleCheckpointStore checkpointStore = new SampleCheckpointStore();
         final TestPartitionProcessor testPartitionProcessor = new TestPartitionProcessor(3);
@@ -811,9 +811,9 @@ public class EventProcessorClientTest {
         when(eventData1.getSequenceNumber()).thenReturn(1L);
         when(eventData2.getSequenceNumber()).thenReturn(2L);
         when(eventData3.getSequenceNumber()).thenReturn(3L);
-        when(eventData1.getOffset()).thenReturn(1L);
-        when(eventData2.getOffset()).thenReturn(100L);
-        when(eventData3.getOffset()).thenReturn(150L);
+        when(eventData1.getOffset()).thenReturn("1L");
+        when(eventData2.getOffset()).thenReturn("100L");
+        when(eventData3.getOffset()).thenReturn("150L");
 
         final SampleCheckpointStore checkpointStore = new SampleCheckpointStore();
         final TestPartitionProcessor testPartitionProcessor = new TestPartitionProcessor(3);
@@ -861,9 +861,9 @@ public class EventProcessorClientTest {
         when(eventData1.getSequenceNumber()).thenReturn(1L);
         when(eventData2.getSequenceNumber()).thenReturn(2L);
         when(eventData3.getSequenceNumber()).thenReturn(3L);
-        when(eventData1.getOffset()).thenReturn(1L);
-        when(eventData2.getOffset()).thenReturn(100L);
-        when(eventData3.getOffset()).thenReturn(150L);
+        when(eventData1.getOffset()).thenReturn("1L");
+        when(eventData2.getOffset()).thenReturn("100L");
+        when(eventData3.getOffset()).thenReturn("150L");
 
         final SampleCheckpointStore checkpointStore = new SampleCheckpointStore();
         final TestPartitionProcessor testPartitionProcessor = new TestPartitionProcessor(3);
@@ -909,9 +909,9 @@ public class EventProcessorClientTest {
         when(eventData1.getSequenceNumber()).thenReturn(1L);
         when(eventData2.getSequenceNumber()).thenReturn(2L);
         when(eventData3.getSequenceNumber()).thenReturn(3L);
-        when(eventData1.getOffset()).thenReturn(1L);
-        when(eventData2.getOffset()).thenReturn(100L);
-        when(eventData3.getOffset()).thenReturn(150L);
+        when(eventData1.getOffset()).thenReturn("1L");
+        when(eventData2.getOffset()).thenReturn("100L");
+        when(eventData3.getOffset()).thenReturn("150L");
 
         final SampleCheckpointStore checkpointStore = new SampleCheckpointStore();
         final TestPartitionProcessor testPartitionProcessor = new TestPartitionProcessor(1);
@@ -958,10 +958,10 @@ public class EventProcessorClientTest {
         when(consumer1.receiveFromPartition(anyString(), any(EventPosition.class), any(ReceiveOptions.class)))
             .thenReturn(Flux.just(getEvent(eventData1), getEvent(eventData2)).delayElements(Duration.ofSeconds(3)));
         when(eventData1.getSequenceNumber()).thenReturn(1L);
-        when(eventData1.getOffset()).thenReturn(1L);
+        when(eventData1.getOffset()).thenReturn("1L");
         when(eventData1.getEnqueuedTime()).thenReturn(Instant.ofEpochSecond(1560639208));
         when(eventData2.getSequenceNumber()).thenReturn(2L);
-        when(eventData2.getOffset()).thenReturn(100L);
+        when(eventData2.getOffset()).thenReturn("100L");
         when(eventData2.getEnqueuedTime()).thenReturn(Instant.ofEpochSecond(1560639208));
 
         String diagnosticId = "00-08ee063508037b1719dddcbf248e30e2-1365c684eb25daed-01";
@@ -1014,10 +1014,10 @@ public class EventProcessorClientTest {
         when(consumer1.receiveFromPartition(anyString(), any(EventPosition.class), any(ReceiveOptions.class)))
             .thenReturn(Flux.just(getEvent(eventData1), getEvent(eventData2)).delayElements(Duration.ofSeconds(3)));
         when(eventData1.getSequenceNumber()).thenReturn(1L);
-        when(eventData1.getOffset()).thenReturn(1L);
+        when(eventData1.getOffset()).thenReturn("1L");
         when(eventData1.getEnqueuedTime()).thenReturn(Instant.ofEpochSecond(1560639208));
         when(eventData2.getSequenceNumber()).thenReturn(2L);
-        when(eventData2.getOffset()).thenReturn(100L);
+        when(eventData2.getOffset()).thenReturn("100L");
         when(eventData2.getEnqueuedTime()).thenReturn(Instant.ofEpochSecond(1560639208));
 
         String diagnosticId = "00-08ee063508037b1719dddcbf248e30e2-1365c684eb25daed-01";

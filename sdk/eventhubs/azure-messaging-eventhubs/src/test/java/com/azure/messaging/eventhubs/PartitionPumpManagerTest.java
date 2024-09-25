@@ -133,7 +133,7 @@ public class PartitionPumpManagerTest {
     public static Stream<Arguments> startPartitionPumpAtCorrectPosition() {
         final EventPosition mapPosition = EventPosition.fromSequenceNumber(165L);
         final long sequenceNumber = 15L;
-        final long offset = 10L;
+        final String offset = "10";
 
         return Stream.of(
             // Offset is used if available.
@@ -152,7 +152,7 @@ public class PartitionPumpManagerTest {
      */
     @MethodSource
     @ParameterizedTest
-    public void startPartitionPumpAtCorrectPosition(Long offset, Long sequenceNumber, EventPosition initialPosition,
+    public void startPartitionPumpAtCorrectPosition(String offset, Long sequenceNumber, EventPosition initialPosition,
         EventPosition expectedPosition) {
 
         // Arrange
@@ -248,7 +248,7 @@ public class PartitionPumpManagerTest {
         final PartitionPumpManager manager = new PartitionPumpManager(checkpointStore, supplier, builder,
             DEFAULT_INSTRUMENTATION, options);
 
-        checkpoint.setOffset(1L).setSequenceNumber(10L);
+        checkpoint.setOffset("1").setSequenceNumber(10L);
         partitionOwnership.setLastModifiedTime(OffsetDateTime.now().toEpochSecond());
 
         // Adds a partition pump, as if that there is already one started.
@@ -399,17 +399,17 @@ public class PartitionPumpManagerTest {
 
         final Instant lastEnqueuedTime = retrievalTime.minusSeconds(60);
         final LastEnqueuedEventProperties lastEnqueuedProperties1 =
-            new LastEnqueuedEventProperties(10L, 15L, retrievalTime, lastEnqueuedTime.plusSeconds(1), 5);
+            new LastEnqueuedEventProperties(10L, "15", retrievalTime, lastEnqueuedTime.plusSeconds(1), 5);
         final EventData eventData1 = new EventData("1");
         final PartitionEvent partitionEvent1 = new PartitionEvent(PARTITION_CONTEXT, eventData1, lastEnqueuedProperties1);
 
         final LastEnqueuedEventProperties lastEnqueuedProperties2 =
-            new LastEnqueuedEventProperties(20L, 25L, retrievalTime, lastEnqueuedTime.plusSeconds(2), 1);
+            new LastEnqueuedEventProperties(20L, "25", retrievalTime, lastEnqueuedTime.plusSeconds(2), 1);
         final EventData eventData2 = new EventData("2");
         final PartitionEvent partitionEvent2 = new PartitionEvent(PARTITION_CONTEXT, eventData2, lastEnqueuedProperties2);
 
         final LastEnqueuedEventProperties lastEnqueuedProperties3 =
-            new LastEnqueuedEventProperties(30L, 35L, retrievalTime, lastEnqueuedTime.plusSeconds(3), null);
+            new LastEnqueuedEventProperties(30L, "35", retrievalTime, lastEnqueuedTime.plusSeconds(3), null);
         final EventData eventData3 = new EventData("3");
         final PartitionEvent partitionEvent3 = new PartitionEvent(PARTITION_CONTEXT, eventData3, lastEnqueuedProperties3);
 
@@ -645,7 +645,7 @@ public class PartitionPumpManagerTest {
         initialPartitionPositions.put(partitionId, EventPosition.fromSequenceNumber(11L, true));
         initialPartitionPositions.put("another", EventPosition.earliest());
 
-        final long offset = 242343;
+        final String offset = "242343";
         final long sequenceNumber = 150;
         checkpoint.setOffset(offset)
             .setSequenceNumber(sequenceNumber);
@@ -1060,7 +1060,7 @@ public class PartitionPumpManagerTest {
     private PartitionEvent createEvent(Instant retrievalTime, int index) {
         Instant lastEnqueuedTime = retrievalTime.minusSeconds(60);
         LastEnqueuedEventProperties lastEnqueuedProperties =
-            new LastEnqueuedEventProperties((long) index, (long) index, retrievalTime, lastEnqueuedTime.plusSeconds(index), 2);
+            new LastEnqueuedEventProperties((long) index, String.valueOf(index), retrievalTime, lastEnqueuedTime.plusSeconds(index), 2);
         return new PartitionEvent(PARTITION_CONTEXT, new EventData(String.valueOf(index)), lastEnqueuedProperties);
     }
 }

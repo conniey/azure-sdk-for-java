@@ -122,9 +122,9 @@ class EventHubPartitionAsyncConsumerTest {
 
         final EventData event1 = new EventData("Foo");
         final EventData event2 = new EventData("Bar");
-        final LastEnqueuedEventProperties last1 = new LastEnqueuedEventProperties(10L, 15L,
+        final LastEnqueuedEventProperties last1 = new LastEnqueuedEventProperties(10L, "15",
             Instant.ofEpochMilli(1243454), Instant.ofEpochMilli(1240004), 3);
-        final LastEnqueuedEventProperties last2 = new LastEnqueuedEventProperties(1005L, 154L,
+        final LastEnqueuedEventProperties last2 = new LastEnqueuedEventProperties(1005L, "154",
             Instant.ofEpochMilli(8796254), Instant.ofEpochMilli(8795200), 10);
 
         when(messageSerializer.deserialize(same(message1), eq(EventData.class))).thenReturn(event1);
@@ -339,7 +339,7 @@ class EventHubPartitionAsyncConsumerTest {
         amqpAnnotatedMessage.getMessageAnnotations()
             .put(AmqpMessageConstant.REPLICATION_SEGMENT_ANNOTATION_NAME.getValue(), replicationSegment);
 
-        return new SystemProperties(amqpAnnotatedMessage, offset, TEST_DATE, sequenceNumber, null, null);
+        return new SystemProperties(amqpAnnotatedMessage, String.valueOf(offset), TEST_DATE, sequenceNumber, null, null);
     }
 
 
