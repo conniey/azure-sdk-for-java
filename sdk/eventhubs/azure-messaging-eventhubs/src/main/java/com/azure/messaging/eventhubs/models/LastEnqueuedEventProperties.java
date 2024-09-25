@@ -13,7 +13,7 @@ import java.time.Instant;
 @Immutable
 public class LastEnqueuedEventProperties {
     private final Long lastSequenceNumber;
-    private final Long lastOffset;
+    private final String lastOffset;
     private final Instant lastEnqueuedTime;
     private final Instant retrievalTime;
     private final Integer lastEnqueuedReplicationSegment;
@@ -32,7 +32,7 @@ public class LastEnqueuedEventProperties {
      * @param lastEnqueuedReplicationSegment The replication segment for the last event. {@code null} or -1 if
      *     geo-disaster recovery is not enabled.
      */
-    public LastEnqueuedEventProperties(Long lastSequenceNumber, Long lastOffset, Instant lastEnqueuedTime,
+    public LastEnqueuedEventProperties(Long lastSequenceNumber, String lastOffset, Instant lastEnqueuedTime,
                                        Instant retrievalTime, Integer lastEnqueuedReplicationSegment) {
         this.lastSequenceNumber = lastSequenceNumber;
         this.lastOffset = lastOffset;
@@ -57,7 +57,7 @@ public class LastEnqueuedEventProperties {
      * @return The offset of the last observed event enqueued in the partition. {@code null} if the information has not
      *     been retrieved, yet.
      */
-    public Long getOffset() {
+    public String getOffset() {
         return lastOffset;
     }
 
