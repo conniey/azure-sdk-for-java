@@ -13,7 +13,7 @@
 
   <groupId>com.azure</groupId>
   <artifactId>azure-storage-internal-avro</artifactId>
-  <version>12.14.0-beta.1</version> <!-- {x-version-update;com.azure:azure-storage-internal-avro;current} -->
+  <version>12.14.0-beta.2</version> <!-- {x-version-update;com.azure:azure-storage-internal-avro;current} -->
 
   <name>Microsoft Azure internal Avro module for Storage</name>
   <description>This module contains internal use only avro parser code based for Microsoft Azure Storage client libraries.</description>
@@ -63,7 +63,7 @@
     <dependency>
       <groupId>com.azure</groupId>
       <artifactId>azure-storage-common</artifactId>
-      <version>12.28.0-beta.1</version> <!-- {x-version-update;com.azure:azure-storage-common;current} -->
+      <version>12.28.0-beta.2</version> <!-- {x-version-update;com.azure:azure-storage-common;current} -->
     </dependency>
 
     <dependency>
@@ -81,7 +81,7 @@
     <dependency>
       <groupId>com.azure</groupId>
       <artifactId>azure-storage-common</artifactId>
-      <version>12.28.0-beta.1</version> <!-- {x-version-update;com.azure:azure-storage-common;current} -->
+      <version>12.28.0-beta.2</version> <!-- {x-version-update;com.azure:azure-storage-common;current} -->
       <classifier>tests</classifier>
       <type>test-jar</type>
       <scope>test</scope>
@@ -102,7 +102,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-javadoc-plugin</artifactId>
-        <version>3.6.3</version> <!-- {x-version-update;org.apache.maven.plugins:maven-javadoc-plugin;external_dependency} -->
+        <version>3.10.1</version> <!-- {x-version-update;org.apache.maven.plugins:maven-javadoc-plugin;external_dependency} -->
         <executions>
           <execution>
             <id>attach-javadocs</id>
@@ -118,7 +118,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-jar-plugin</artifactId>
-        <version>3.3.0</version> <!-- {x-version-update;org.apache.maven.plugins:maven-jar-plugin;external_dependency} -->
+        <version>3.4.2</version> <!-- {x-version-update;org.apache.maven.plugins:maven-jar-plugin;external_dependency} -->
         <executions>
           <execution>
             <id>empty-javadoc-jar-with-readme</id>
